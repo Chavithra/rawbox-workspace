@@ -1,0 +1,25 @@
+{
+  "name": "rawbox-default-plugins",
+  "version": "1.0.0",
+  "exports": {
+    "./control-flow-definition": "./dist/src/control-flow/core/control-flow-definition.js",
+    "./control-flow-definition-cache": "./dist/src/control-flow/core/control-flow-definition-cache.js",
+    "./control-flow-definition-builder": "./dist/src/control-flow/core/control-flow-definition-builder.js"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "type": "module",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^20.11.20",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.38",
+    "neverthrow": "^8.2.0"
+  }
+}

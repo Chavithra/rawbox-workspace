@@ -1,0 +1,51 @@
+{
+  "name": "rawbox-plugin",
+  "version": "1.0.0",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./dist/src/index.js",
+    "./contracts-registry-cache": "./dist/src/contracts-registry-cache.js",
+    "./contracts-registry-loader": "./dist/src/contracts-registry-loader.js",
+    "./contracts-registry-utils": "./dist/src/contracts-registry-utils.js",
+    "./contracts-registry": "./dist/src/contracts-registry.js",
+    "./definition-cache": "./dist/src/definition-cache.js",
+    "./definition-utils": "./dist/src/definition-utils.js",
+    "./definition": "./dist/src/definition.js",
+    "./entries-utils": "./dist/src/entries-utils.js",
+    "./operation-definition-cache": "./dist/src/operation-definition-cache.js",
+    "./operation-definition": "./dist/src/operation-definition.js",
+    "./rawbox-config-loader": "./dist/src/rawbox-config-loader.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/src/index.js",
+    "test": "npm run build && vitest",
+    "coverage": "npm run build && vitest run --coverage",
+    "test-benchmark": "npm run build && node --max-old-space-size=8192 dist/src/test-benchmark.js",
+    "test-load": "npm run build && node --max-old-space-size=8192 dist/src/test-load.js",
+    "generate-benchmark": "npm run build && node dist/src/generate-benchmark-files.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@faker-js/faker": "^10.0.0",
+    "@types/benchmark": "^2.1.5",
+    "@types/node": "^20.11.20",
+    "@vitest/coverage-v8": "^3.2.4",
+    "benchmark": "^2.1.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.37",
+    "glob": "^11.0.3",
+    "neverthrow": "^8.2.0",
+    "uuid": "^11.1.0",
+    "vite-tsconfig-paths": "^5.1.4"
+  },
+  "description": ""
+}

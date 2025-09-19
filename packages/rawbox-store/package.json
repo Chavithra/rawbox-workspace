@@ -1,0 +1,35 @@
+{
+  "name": "rawbox-store",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./dist/index.js",
+    "./lmdb-box-store": "./dist/lmdb-box-store.js",
+    "./box-store-utils": "./dist/box-store-utils.js",
+    "./identifiable-utils": "./dist/identifiable-utils.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/index.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test-lmdb": "npm run build && node dist/test-lmdb.js",
+    "test-port": "npm run build && node dist/test-port.js"
+  },
+  "keywords": [],
+  "author": "",
+  "type": "module",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/benchmark": "^2.1.5",
+    "@types/node": "^20.11.20",
+    "benchmark": "^2.1.4",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "async-mutex": "^0.5.0",
+    "lmdb": "^3.4.0",
+    "neverthrow": "^8.2.0",
+    "uuid": "^11.1.0",
+    "winston": "^3.17.0"
+  }
+}

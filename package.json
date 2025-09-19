@@ -1,0 +1,23 @@
+{
+  "name": "rawbox-workspace",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build:all": "npm run build --workspaces",
+    "test:all": "npm run test --workspaces"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "type": "module",
+  "workspaces": [
+    "packages/rawbox-plugin",
+    "packages/rawbox-cli",
+    "packages/rawbox-default-plugins",
+    "packages/rawbox-store",
+    "packages/rawbox-runner",
+    "packages/rawbox-server",
+    "packages/rawbox-client"
+  ]
+}

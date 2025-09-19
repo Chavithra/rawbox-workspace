@@ -1,0 +1,35 @@
+{
+  "name": "rawbox-server",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./dist/src/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/src/index.js",
+    "migrate": "npm run build && drizzle-kit migrate",
+    "generate": "npm run build && drizzle-kit generate",
+    "studio": "npm run build && drizzle-kit studio"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "@fastify/env": "^5.0.2",
+    "@fastify/swagger": "^9.5.1",
+    "@fastify/swagger-ui": "^5.2.3",
+    "@fastify/type-provider-typebox": "^5.2.0",
+    "@sinclair/typebox": "^0.34.38",
+    "better-sqlite3": "^12.2.0",
+    "drizzle-orm": "^0.44.4",
+    "drizzle-typebox": "^0.3.3",
+    "fastify": "^5.5.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "drizzle-kit": "^0.31.4"
+  }
+}

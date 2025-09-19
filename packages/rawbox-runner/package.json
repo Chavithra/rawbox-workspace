@@ -1,0 +1,38 @@
+{
+  "name": "rawbox-runner",
+  "version": "1.0.0",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/index.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test-store": "npm run build && node dist/test-store.js",
+    "agent-runner": "npm run build && node dist/agent-runner.js",
+    "demo-operation": "npm run build && node dist/demo-operation.js",
+    "demo-agent": "npm run build && node dist/demo-agent.js",
+    "test-worker": "npm run build && node dist/test-worker.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/benchmark": "^2.1.5",
+    "@types/node": "^20.11.20",
+    "benchmark": "^2.1.4",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.38",
+    "glob": "^11.0.3",
+    "neverthrow": "^8.2.0",
+    "uuid": "^11.1.0",
+    "xstate": "^5.20.1"
+  },
+  "description": ""
+}
