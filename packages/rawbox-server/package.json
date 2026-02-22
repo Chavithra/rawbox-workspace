@@ -1,21 +1,5 @@
 {
-  "name": "rawbox-server",
-  "version": "1.0.0",
-  "type": "module",
-  "exports": {
-    ".": "./dist/src/index.js"
-  },
-  "scripts": {
-    "build": "tsc",
-    "start": "npm run build && node dist/src/index.js",
-    "migrate": "npm run build && drizzle-kit migrate",
-    "generate": "npm run build && drizzle-kit generate",
-    "studio": "npm run build && drizzle-kit studio"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "author": "Chavithra PARANA <chavithra@gmail.com>",
   "dependencies": {
     "@fastify/cors": "^11.1.0",
     "@fastify/env": "^5.0.2",
@@ -28,8 +12,30 @@
     "drizzle-typebox": "^0.3.3",
     "fastify": "^5.5.0"
   },
+  "description": "",
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "drizzle-kit": "^0.31.4"
-  }
+    "@types/node": "^25.0.10",
+    "drizzle-kit": "^0.31.8",
+    "prettier": "^3.8.1",
+    "tsc-watch": "^7.2.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "keywords": [],
+  "license": "ISC",
+  "name": "rawbox-server",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc-watch --onSuccess \"npm run start\"",
+    "drizzle:generate": "npm run build && drizzle-kit generate",
+    "drizzle:migrate": "npm run build && drizzle-kit migrate",
+    "drizzle:studio": "npm run build && drizzle-kit studio",
+    "prettier:format": "prettier src --write",
+    "start": "node dist/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "type-check": "tsc --noEmit"
+  },
+  "type": "module",
+  "version": "1.0.0"
 }
