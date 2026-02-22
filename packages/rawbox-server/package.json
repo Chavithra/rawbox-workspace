@@ -23,7 +23,7 @@
     "typescript": "^5.9.3"
   },
   "keywords": [],
-  "license": "ISC",
+  "license": "BSD-3-Clause",
   "name": "rawbox-server",
   "scripts": {
     "build": "tsc",

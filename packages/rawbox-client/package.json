@@ -49,7 +49,7 @@
     "vite": "^6.3.5"
   },
   "keywords": [],
-  "license": "ISC",
+  "license": "BSD-3-Clause",
   "name": "rawbox-client",
   "scripts": {
     "build": "npm run codegen && tsc -b && vite build",
