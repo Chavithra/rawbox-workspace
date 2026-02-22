@@ -1,6 +1,6 @@
-import type { Result } from "neverthrow";
+import type { Result } from 'neverthrow';
 
-import type { Identifiable } from "./identifiable.js";
+import type { Identifiable } from './identifiable.js';
 
 export interface BoxLocation {
   readonly env: Identifiable;
@@ -27,7 +27,7 @@ export interface BoxStore<TValue> {
    * @returns A StorageMap containing the retrieved Buffer values, or undefined for keys not found.
    */
   getMany(
-    storageKeyList: BoxLocation[]
+    storageKeyList: BoxLocation[],
   ): Promise<Result<Box<TValue>, string>[]>;
 
   /**
@@ -36,6 +36,6 @@ export interface BoxStore<TValue> {
    * @returns A StorageMap indicating success (true) or failure (false) for each key.
    */
   deleteMany(
-    storageKeyList: BoxLocation[]
+    storageKeyList: BoxLocation[],
   ): Promise<Result<BoxLocation, string>[]>;
 }

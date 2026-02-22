@@ -1,10 +1,10 @@
-import type { BoxLocation } from "./box-store.js";
-import { Identifiable } from "./identifiable.js";
+import type { BoxLocation } from './box-store.js';
+import { Identifiable } from './identifiable.js';
 
 export function createSimpleBoxLocation(
   envIdentifier: string,
   dbiIdentifier: string,
-  keyIdentifier: string
+  keyIdentifier: string,
 ): BoxLocation {
   return {
     env: {
@@ -25,7 +25,7 @@ export function createSimpleBoxLocation(
 export function createBoxLocation(
   envIdentifiable: Identifiable,
   dbiIdentifiable: Identifiable,
-  keyIdentifiable: Identifiable
+  keyIdentifiable: Identifiable,
 ): BoxLocation {
   return {
     env: envIdentifiable,
@@ -36,7 +36,7 @@ export function createBoxLocation(
 
 export function areLocationsEqual(
   location1: BoxLocation,
-  location2: BoxLocation
+  location2: BoxLocation,
 ): boolean {
   return (
     location1.env.id === location2.env.id &&

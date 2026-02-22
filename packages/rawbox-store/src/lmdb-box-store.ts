@@ -1,7 +1,7 @@
-import { Database, DatabaseOptions, Key, open, RootDatabase } from "lmdb";
-import { Mutex } from "async-mutex";
-import { ok, err, Result } from "neverthrow";
-import { Box, BoxLocation, BoxStore } from "./box-store.js";
+import { Database, DatabaseOptions, Key, open, RootDatabase } from 'lmdb';
+import { Mutex } from 'async-mutex';
+import { ok, err, Result } from 'neverthrow';
+import { Box, BoxLocation, BoxStore } from './box-store.js';
 
 export class LmdbDbiCache<TValue> {
   public constructor(
@@ -10,7 +10,7 @@ export class LmdbDbiCache<TValue> {
     private readonly dbiMap: Map<string, Database<TValue, string>> = new Map<
       string,
       Database<TValue, string>
-    >()
+    >(),
   ) {}
 
   public getOrCreateDbi(dbiIdentifier: string): Result<Database, string> {
@@ -30,7 +30,7 @@ export class LmdbDbiCache<TValue> {
         dbiMap.set(lookupKey, dbi);
       } catch (e: any) {
         return err(
-          `Failed to open/create DBI '${dbiIdentifier}': ${e.message}`
+          `Failed to open/create DBI '${dbiIdentifier}': ${e.message}`,
         );
       }
     }
@@ -51,11 +51,11 @@ export class LmdbEnvCache<TValue> {
       string,
       LmdbDbiCache<TValue>
     >(),
-    private readonly envMutexMap: Map<string, Mutex> = new Map<string, Mutex>()
+    private readonly envMutexMap: Map<string, Mutex> = new Map<string, Mutex>(),
   ) {}
 
   public getOrCreateEnv(
-    envIdentifier: string
+    envIdentifier: string,
   ): Result<RootDatabase<TValue, string>, string> {
     const folderPath = this.folderPath;
     const dbiOptions = this.dbiOptions;
@@ -94,7 +94,7 @@ export class LmdbEnvCache<TValue> {
   }
 
   private getOrCreateDbiCache(
-    envIdentifier: string
+    envIdentifier: string,
   ): Result<LmdbDbiCache<TValue>, string> {
     const resultEnv = this.getOrCreateEnv(envIdentifier);
     const dbiCacheMap = this.dbiCacheMap;
@@ -112,7 +112,7 @@ export class LmdbEnvCache<TValue> {
       result = ok(dbiCache);
     } else {
       result = err(
-        `Failed to get or create environment '${envIdentifier}': ${resultEnv.error}`
+        `Failed to get or create environment '${envIdentifier}': ${resultEnv.error}`,
       );
     }
 
@@ -123,8 +123,8 @@ export class LmdbEnvCache<TValue> {
     envIdentifier: string,
     callback: (
       env: RootDatabase,
-      dbiCache: LmdbDbiCache<TValue>
-    ) => Promise<TResultT>
+      dbiCache: LmdbDbiCache<TValue>,
+    ) => Promise<TResultT>,
   ): Promise<Result<TResultT, string>> {
     let envMutex = this.getOrCreateEnvMutex(envIdentifier);
     let result: Result<TResultT, string>;
@@ -145,7 +145,7 @@ export class LmdbEnvCache<TValue> {
               resultMutex = ok(callbackResult);
             } catch (e: any) {
               resultMutex = err(
-                e.message || "Callback function threw an error."
+                e.message || 'Callback function threw an error.',
               );
             }
           } else {
@@ -159,7 +159,7 @@ export class LmdbEnvCache<TValue> {
       });
     } catch (e: any) {
       result = err(
-        e.message || "An unexpected error occurred during mutex execution."
+        e.message || 'An unexpected error occurred during mutex execution.',
       );
     }
 
@@ -175,7 +175,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
   public static async deleteManyOneEnv<TValue>(
     envCache: LmdbBoxEnvCache<TValue>,
     envIdentifier: string,
-    boxLocationList: BoxLocation[]
+    boxLocationList: BoxLocation[],
   ): Promise<Result<BoxLocation, string>[]> {
     let result: Result<BoxLocation, string>[];
 
@@ -189,7 +189,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
           const resultInTransaction: Result<BoxLocation, string>[] = [];
           const groupedByDbi = Map.groupBy(
             boxLocationList,
-            (boxLocation) => boxLocation.dbi.id
+            (boxLocation) => boxLocation.dbi.id,
           );
 
           for (const [
@@ -208,7 +208,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
               resultOneDbi = OneDbiboxLocationList.map((box) => ok(box));
             } else {
               resultOneDbi = OneDbiboxLocationList.map((boxLocation) =>
-                err(`Can't load DBI for boxLocation ${boxLocation.toString()}`)
+                err(`Can't load DBI for boxLocation ${boxLocation.toString()}`),
               );
             }
 
@@ -228,8 +228,8 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
           err(
             `Failed to execute delete on env '${envIdentifier}' for item '${boxLocation.toString()}': ${
               resultOfRunExclusive.error
-            }`
-          )
+            }`,
+          ),
         );
 
         result = errorList;
@@ -241,12 +241,12 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
 
   public static async deleteMany<TValue>(
     envCache: LmdbBoxEnvCache<TValue>,
-    boxLocationList: BoxLocation[]
+    boxLocationList: BoxLocation[],
   ): Promise<Result<BoxLocation, string>[]> {
     const result: Result<BoxLocation, string>[] = [];
     const groupedByEnv = Map.groupBy(
       boxLocationList,
-      (boxLocation) => boxLocation.env.id
+      (boxLocation) => boxLocation.env.id,
     );
 
     for (const [
@@ -259,7 +259,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
       const resultListOneEnv = await LmdbBoxStore.deleteManyOneEnv<TValue>(
         envCache,
         envIdentifier,
-        OneEnvboxLocationList
+        OneEnvboxLocationList,
       );
 
       result.push(...resultListOneEnv);
@@ -270,7 +270,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
   public static async getManyOneEnv<TValue>(
     envCache: LmdbBoxEnvCache<TValue>,
     envIdentifier: string,
-    boxLocationList: BoxLocation[]
+    boxLocationList: BoxLocation[],
   ): Promise<Result<Box<TValue>, string>[]> {
     let result: Result<Box<TValue>, string>[];
 
@@ -285,7 +285,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
 
           const groupedByDbi = Map.groupBy(
             boxLocationList,
-            (boxLocation) => boxLocation.dbi.id
+            (boxLocation) => boxLocation.dbi.id,
           );
 
           for (const [
@@ -301,14 +301,14 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
               const dbi = resultOfGetOrCreateDbi.value;
               const keyList = OneDbiboxLocationList.map(
                 (boxLocation) =>
-                  `${envIdentifier}:${dbiIdentifier}:${boxLocation.key.id}`
+                  `${envIdentifier}:${dbiIdentifier}:${boxLocation.key.id}`,
               );
 
               const resultOfGetMany = await dbi.getMany(keyList);
               resultInFor = resultOfGetMany.map((result) => ok(result));
             } else {
               resultInFor = OneDbiboxLocationList.map((boxLocation) =>
-                err(`Can't load DBI for boxLocation ${boxLocation.toString()}`)
+                err(`Can't load DBI for boxLocation ${boxLocation.toString()}`),
               );
             }
 
@@ -328,8 +328,8 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
           err(
             `Failed to execute get on env '${envIdentifier}' for item '${boxLocation.toString()}': ${
               resultOfRunExclusive.error
-            }`
-          )
+            }`,
+          ),
         );
 
         result = errorList;
@@ -341,12 +341,12 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
 
   public static async getMany<TValue>(
     envCache: LmdbBoxEnvCache<TValue>,
-    boxLocationList: BoxLocation[]
+    boxLocationList: BoxLocation[],
   ): Promise<Result<Box<TValue>, string>[]> {
     const result: Result<Box<TValue>, string>[] = [];
     const groupedByEnv = Map.groupBy(
       boxLocationList,
-      (boxLocation) => boxLocation.env.id
+      (boxLocation) => boxLocation.env.id,
     );
 
     for (const [
@@ -359,7 +359,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
       const resultListOneEnv = await LmdbBoxStore.getManyOneEnv<TValue>(
         envCache,
         envIdentifier,
-        OneEnvboxLocationList
+        OneEnvboxLocationList,
       );
 
       result.push(...resultListOneEnv);
@@ -371,7 +371,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
   public static async setManyOneEnv<TValue>(
     envCache: LmdbBoxEnvCache<TValue>,
     envIdentifier: string,
-    itemList: Box<TValue>[]
+    itemList: Box<TValue>[],
   ): Promise<Result<Box<TValue>, string>[]> {
     let result: Result<Box<TValue>, string>[];
 
@@ -385,7 +385,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
           const resultTransaction: Result<Box<TValue>, string>[] = [];
           const groupedByDbi = Map.groupBy(
             itemList,
-            (box) => box.location.dbi.id
+            (box) => box.location.dbi.id,
           );
 
           for (const [
@@ -399,7 +399,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
               const dbi = resultDbi.value;
               const keyList = OneDbiItemList.map(
                 (box) =>
-                  `${envIdentifier}:${dbiIdentifier}:${box.location.key.id}`
+                  `${envIdentifier}:${dbiIdentifier}:${box.location.key.id}`,
               );
               for (const [index, box] of OneDbiItemList.entries()) {
                 const key = keyList[index];
@@ -408,7 +408,9 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
               resultOneDbi = OneDbiItemList.map((box) => ok(box));
             } else {
               resultOneDbi = OneDbiItemList.map((box) =>
-                err(`Can't load DBI for boxLocation ${box.location.toString()}`)
+                err(
+                  `Can't load DBI for boxLocation ${box.location.toString()}`,
+                ),
               );
             }
 
@@ -428,8 +430,8 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
           err(
             `Failed to execute set on env '${envIdentifier}' for item '${box.location.toString()}': ${
               resultRunExclusive.error
-            }`
-          )
+            }`,
+          ),
         );
 
         result = errorList;
@@ -441,7 +443,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
 
   public static async setMany<TValue>(
     envCache: LmdbBoxEnvCache<TValue>,
-    itemList: Box<TValue>[]
+    itemList: Box<TValue>[],
   ): Promise<Result<Box<TValue>, string>[]> {
     const result: Result<Box<TValue>, string>[] = [];
     const groupedByEnv = Map.groupBy(itemList, (box) => box.location.env.id);
@@ -453,7 +455,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
       const resultListOneEnv = await LmdbBoxStore.setManyOneEnv<TValue>(
         envCache,
         envIdentifier,
-        OneEnvItemList
+        OneEnvItemList,
       );
 
       result.push(...resultListOneEnv);
@@ -463,7 +465,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
   }
 
   public async deleteMany(
-    boxLocationList: BoxLocation[]
+    boxLocationList: BoxLocation[],
   ): Promise<Result<BoxLocation, string>[]> {
     const envCache = this.envCache;
     const result = LmdbBoxStore.deleteMany(envCache, boxLocationList);
@@ -472,7 +474,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
   }
 
   public async getMany(
-    boxLocationList: BoxLocation[]
+    boxLocationList: BoxLocation[],
   ): Promise<Result<Box<TValue>, string>[]> {
     const envCache = this.envCache;
     const result = LmdbBoxStore.getMany<TValue>(envCache, boxLocationList);
@@ -481,7 +483,7 @@ export class LmdbBoxStore<TValue> implements BoxStore<TValue> {
   }
 
   public async setMany(
-    itemList: Box<TValue>[]
+    itemList: Box<TValue>[],
   ): Promise<Result<Box<TValue>, string>[]> {
     const envCache = this.envCache;
     const result = LmdbBoxStore.setMany<TValue>(envCache, itemList);
