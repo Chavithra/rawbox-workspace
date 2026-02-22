@@ -3,12 +3,12 @@ import type {
   ContractsRecord,
   ContractsRegistry,
   ContractsRegistryPath,
-} from "./contracts-registry.js";
-import { getCallerFilePath } from "./entries-utils.js";
+} from './contracts-registry.js';
+import { getCallerFilePath } from './entries-utils.js';
 
 export function exportSetupContractsRegistry<TContract extends Contract>() {
   return function setupRegistry<
-    const TContractsRecord extends ContractsRecord<TContract>
+    const TContractsRecord extends ContractsRecord<TContract>,
   >(options: {
     contractsRecord: TContractsRecord;
     contractsRegistryPath?: ContractsRegistryPath;
@@ -24,7 +24,7 @@ export function exportSetupContractsRegistry<TContract extends Contract>() {
 }
 
 export function getDefinitionPathList<TContract extends Contract>(
-  contractsRegistry: ContractsRegistry<TContract>
+  contractsRegistry: ContractsRegistry<TContract>,
 ): string[] {
   return Object.keys(contractsRegistry.contractsRecord);
 }

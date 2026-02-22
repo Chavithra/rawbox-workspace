@@ -1,4 +1,4 @@
-import type { DefinitionPath } from "./definition.js";
+import type { DefinitionPath } from './definition.js';
 
 export type ContractsRegistryPath = string;
 

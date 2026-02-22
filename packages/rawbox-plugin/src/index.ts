@@ -4,6 +4,6 @@
  * Operation Definitions and use them.
  */
 
-export { getOperationDefinitionCreator } from "./operation-definition-builder.js";
-export { setupOperationContractsRegistry } from "./operation-definition.js";
-export type { Contract, ContractsRecord } from "./contracts-registry.js";
+export { getOperationDefinitionCreator } from './operation-definition-builder.js';
+export { setupOperationContractsRegistry } from './operation-definition.js';
+export type { Contract, ContractsRecord } from './contracts-registry.js';

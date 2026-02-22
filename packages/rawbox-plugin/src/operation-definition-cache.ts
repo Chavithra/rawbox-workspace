@@ -2,22 +2,22 @@ import {
   OperationContract,
   operationContractGuard,
   OperationDefinition,
-} from "./operation-definition.js";
+} from './operation-definition.js';
 import {
   createLoadDefinition,
   createDefinitionCache,
   DefinitionCache,
-} from "./definition-cache.js";
-import { Contract, ContractsRegistry } from "./contracts-registry.js";
-import { Result } from "neverthrow";
-import { Static, TObject, Type } from "@sinclair/typebox";
+} from './definition-cache.js';
+import { Contract, ContractsRegistry } from './contracts-registry.js';
+import { Result } from 'neverthrow';
+import { Static, TObject, Type } from '@sinclair/typebox';
 import {
   Definition,
   DefinitionLocation,
   DefinitionPath,
   ValidationError,
-} from "./definition.js";
-import { definitionGuard } from "./definition-utils.js";
+} from './definition.js';
+import { definitionGuard } from './definition-utils.js';
 
 const AnyObjectSchema = Type.Object({});
 
@@ -48,21 +48,21 @@ export class OperationDynamicCaller<
 
   public async callDefinition<
     TDefinitionPath extends Extract<
-      keyof TContractsRegistry["contractsRecord"],
+      keyof TContractsRegistry['contractsRecord'],
       string
     >,
   >(
     definitionPath: TDefinitionPath,
     handler: Static<
-      TContractsRegistry["contractsRecord"][TDefinitionPath]["inputSchema"]
-    >
+      TContractsRegistry['contractsRecord'][TDefinitionPath]['inputSchema']
+    >,
   ): Promise<
     Result<
       Static<
-        TContractsRegistry["contractsRecord"][TDefinitionPath]["outputSchema"]
+        TContractsRegistry['contractsRecord'][TDefinitionPath]['outputSchema']
       >,
       | Static<
-          TContractsRegistry["contractsRecord"][TDefinitionPath]["errorSchema"]
+          TContractsRegistry['contractsRecord'][TDefinitionPath]['errorSchema']
         >
       | ValidationError
     >
@@ -88,6 +88,6 @@ export class OperationDynamicCaller<
         }
       }
     }
-    throw new Error("Unknown contract type");
+    throw new Error('Unknown contract type');
   }
 }

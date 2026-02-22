@@ -1,5 +1,5 @@
-import path from "node:path";
-import { ContractsRegistryCache } from "./contracts-registry-cache.js";
+import path from 'node:path';
+import { ContractsRegistryCache } from './contracts-registry-cache.js';
 
 /**
  * This function demonstrates how to load all ContractsRegistry instances
@@ -34,6 +34,6 @@ async function loadAllRegistries(startPath: string) {
 // Example usage: Point this to the directory where you generated the benchmark files.
 
 const benchmarkFilesPath = path.resolve(
-  "/home/dtp2/code/javascript/real/rawbox-workspace/packages/rawbox-default-plugins"
+  '/home/dtp2/code/javascript/real/rawbox-workspace/packages/rawbox-default-plugins',
 );
 await loadAllRegistries(benchmarkFilesPath).catch(console.error);
