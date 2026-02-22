@@ -1,24 +1,24 @@
-import type { FastifyInstance, FastifyPluginOptions } from "fastify";
-import { Static, Type } from "@sinclair/typebox";
-import { eq } from "drizzle-orm";
+import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
+import { Static, Type } from '@sinclair/typebox';
+import { eq } from 'drizzle-orm';
 
-import { workspaceTable } from "../../drizzle/tables/index.js";
+import { workspaceTable } from '../../drizzle/tables/index.js';
 import {
   WorkspaceInsertSchema,
   WorkspaceSelectSchema,
-} from "../../typebox/schemas/workspace.schemas.js";
+} from '../../typebox/schemas/workspace.schemas.js';
 
 export default async function workspaceRoutes(
   fastify: FastifyInstance,
-  options: FastifyPluginOptions
+  options: FastifyPluginOptions,
 ) {
   // POST ONE
   fastify.post<{ Body: WorkspaceInsertSchema }>(
-    "/",
+    '/',
     {
       schema: {
-        description: "Create a workspace",
-        tags: ["workspace"],
+        description: 'Create a workspace',
+        tags: ['workspace'],
         body: WorkspaceInsertSchema,
         response: {
           201: WorkspaceSelectSchema,
@@ -32,16 +32,16 @@ export default async function workspaceRoutes(
         .values(newWorkspace)
         .returning();
       return reply.code(201).send(result[0]);
-    }
+    },
   );
 
   // GET ALL
   fastify.get(
-    "/",
+    '/',
     {
       schema: {
-        description: "Select all workspaces",
-        tags: ["workspace"],
+        description: 'Select all workspaces',
+        tags: ['workspace'],
         response: {
           200: Type.Array(WorkspaceSelectSchema),
         },
@@ -50,7 +50,7 @@ export default async function workspaceRoutes(
     async (request, reply) => {
       const result = await fastify.db.select().from(workspaceTable);
       return reply.send(result);
-    }
+    },
   );
 
   // GET ONE
@@ -58,11 +58,11 @@ export default async function workspaceRoutes(
   type GetOneParamsSchema = Static<typeof GetOneParamsSchema>;
 
   fastify.get<{ Params: GetOneParamsSchema }>(
-    "/:id",
+    '/:id',
     {
       schema: {
-        description: "Get a single workspace by ID",
-        tags: ["workspace"],
+        description: 'Get a single workspace by ID',
+        tags: ['workspace'],
         params: GetOneParamsSchema,
         response: {
           200: WorkspaceSelectSchema,
@@ -85,7 +85,7 @@ export default async function workspaceRoutes(
       }
 
       return reply.send(result[0]);
-    }
+    },
   );
 
   // DELETE ONE
@@ -93,11 +93,11 @@ export default async function workspaceRoutes(
   type DeleteOneParamsSchema = Static<typeof DeleteOneParamsSchema>;
 
   fastify.delete<{ Params: DeleteOneParamsSchema }>(
-    "/:id",
+    '/:id',
     {
       schema: {
-        description: "Delete a workspace by ID",
-        tags: ["workspace"],
+        description: 'Delete a workspace by ID',
+        tags: ['workspace'],
         params: DeleteOneParamsSchema,
         response: {
           200: Type.Object({ message: Type.String() }),
@@ -121,7 +121,7 @@ export default async function workspaceRoutes(
       return reply.send({
         message: `Workspace with id ${id} deleted successfully`,
       });
-    }
+    },
   );
 
   // PATCH ONE
@@ -132,11 +132,11 @@ export default async function workspaceRoutes(
   type PatchOneBodySchema = Static<typeof PatchOneBodySchema>;
 
   fastify.patch<{ Params: PatchOneParamsSchema; Body: PatchOneBodySchema }>(
-    "/:id",
+    '/:id',
     {
       schema: {
-        description: "Update a workspace by ID (partial update)",
-        tags: ["workspace"],
+        description: 'Update a workspace by ID (partial update)',
+        tags: ['workspace'],
         params: PatchOneParamsSchema,
         body: PatchOneBodySchema,
         response: {
@@ -153,7 +153,7 @@ export default async function workspaceRoutes(
       if (Object.keys(updateData).length === 0) {
         return reply
           .code(400)
-          .send({ message: "Request body must not be empty for an update." });
+          .send({ message: 'Request body must not be empty for an update.' });
       }
 
       const result = await fastify.db
@@ -169,6 +169,6 @@ export default async function workspaceRoutes(
       }
 
       return reply.send(result[0]);
-    }
+    },
   );
 }

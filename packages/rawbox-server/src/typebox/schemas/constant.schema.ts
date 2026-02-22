@@ -1,11 +1,11 @@
-import { Static } from "@sinclair/typebox";
+import { Static } from '@sinclair/typebox';
 import {
   createInsertSchema,
   createSelectSchema,
   createUpdateSchema,
-} from "drizzle-typebox";
+} from 'drizzle-typebox';
 
-import { constantTable } from "../../drizzle/tables/constant.table.js";
+import { constantTable } from '../../drizzle/tables/constant.table.js';
 
 export const ConstantSelectSchema = createSelectSchema(constantTable);
 export type ConstantSelectSchema = Static<typeof ConstantSelectSchema>;

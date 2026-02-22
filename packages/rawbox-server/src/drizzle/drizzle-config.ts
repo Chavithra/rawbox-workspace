@@ -4,7 +4,7 @@ import {
   workflowTable,
   workspaceRelations,
   workspaceTable,
-} from "./tables/index.js";
+} from './tables/index.js';
 
 export const schema = {
   contractsRegistryTable,

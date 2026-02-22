@@ -4,8 +4,8 @@ import {
   RawReplyDefaultExpression,
   RawRequestDefaultExpression,
   RawServerDefault,
-} from "fastify";
-import { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
+} from 'fastify';
+import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 
 export type AppInstance = FastifyInstance<
   RawServerDefault,

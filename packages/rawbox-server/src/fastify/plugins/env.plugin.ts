@@ -1,6 +1,6 @@
-import fp from "fastify-plugin";
-import env, { FastifyEnvOptions } from "@fastify/env";
-import { Static, Type } from "@sinclair/typebox";
+import fp from 'fastify-plugin';
+import env, { FastifyEnvOptions } from '@fastify/env';
+import { Static, Type } from '@sinclair/typebox';
 
 // Define the schema for your environment variables using TypeBox.
 // This provides validation and type inference.
@@ -14,7 +14,7 @@ const ConfigSchema = Type.Object({
 export type ConfigSchema = Static<typeof ConfigSchema>;
 
 // Augment the FastifyInstance interface to add the 'config' property
-declare module "fastify" {
+declare module 'fastify' {
   interface FastifyInstance {
     config: ConfigSchema;
   }
@@ -29,5 +29,5 @@ export default fp(
 
     await fastify.register(env, options);
   },
-  { name: "rawbox-backend-env-plugin" }
+  { name: 'rawbox-backend-env-plugin' },
 );

@@ -1,7 +1,7 @@
-import { relations } from "drizzle-orm";
-import { workflowTable } from "./workflow.table.js";
-import { workspaceTable } from "./workspace.table.js";
-import { constantTable } from "./constant.table.js";
+import { relations } from 'drizzle-orm';
+import { workflowTable } from './workflow.table.js';
+import { workspaceTable } from './workspace.table.js';
+import { constantTable } from './constant.table.js';
 
 export const workspaceRelations = relations(workspaceTable, ({ many }) => ({
   workflows: many(workflowTable),
