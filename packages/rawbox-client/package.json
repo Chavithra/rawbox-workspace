@@ -4,11 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
     "build": "npm run codegen && tsc -b && vite build",
-    "codegen-rtk": "npx @rtk-query/codegen-openapi openapi-config.ts",
-    "codegen-typebox": "npx typebox-cli codegen TypeBox --source src/redux/rawbox-api.ts > src/typebox/rawbox-api-schemas.ts",
-    "codegen": "npm run codegen-rtk && npm run codegen-typebox",
+    "codegen:all": "npm run codegen:rtk && npm run codegen:typebox",
+    "codegen:rtk": "npx @rtk-query/codegen-openapi openapi-config.ts",
+    "codegen:typebox": "npx typebox-cli codegen TypeBox --source src/redux/rawbox-api.ts > src/typebox/rawbox-api-schemas.ts",
+    "dev": "vite",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -49,7 +49,6 @@
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
-    "esbuild-runner": "^2.2.2",
     "eslint": "^9.25.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
