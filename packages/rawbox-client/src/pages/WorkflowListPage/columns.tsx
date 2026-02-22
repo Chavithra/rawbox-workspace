@@ -1,44 +1,44 @@
-import { ColumnDef } from "@tanstack/react-table";
-import { Link } from "react-router";
+import { ColumnDef } from '@tanstack/react-table';
+import { Link } from 'react-router';
 
-import { Button } from "@/components/ui/button";
-import { rawboxApi } from "@/redux/rawbox-api";
-import { store } from "@/redux/store";
-import { type GetWorkflowsApiResponse } from "@/typebox/rawbox-api-schemas";
+import { Button } from '@/components/ui/button';
+import { rawboxApi } from '@/redux/rawbox-api';
+import { store } from '@/redux/store';
+import { type GetWorkflowsApiResponse } from '@/typebox/rawbox-api-schemas';
 
 export type WorkflowForList = GetWorkflowsApiResponse[number] & {
   workspaceAlias?: string;
 };
 
 const onDeleteFactory = (id: string) => async () => {
-  if (window.confirm("Are you sure you want to delete this workflow?")) {
+  if (window.confirm('Are you sure you want to delete this workflow?')) {
     try {
       await store
         .dispatch(rawboxApi.endpoints.deleteWorkflowsById.initiate({ id }))
         .unwrap();
     } catch (error) {
-      console.error("Failed to delete workflow:", error);
-      alert("Failed to delete workflow. Please try again.");
+      console.error('Failed to delete workflow:', error);
+      alert('Failed to delete workflow. Please try again.');
     }
   }
 };
 
 export const columns: ColumnDef<WorkflowForList>[] = [
   {
-    accessorKey: "id",
-    header: "Id",
+    accessorKey: 'id',
+    header: 'Id',
   },
   {
-    accessorKey: "workspaceAlias",
-    header: "Workspace alias",
+    accessorKey: 'workspaceAlias',
+    header: 'Workspace alias',
   },
   {
-    accessorKey: "alias",
-    header: "Alias",
+    accessorKey: 'alias',
+    header: 'Alias',
   },
   {
-    id: "actions",
-    header: "Actions",
+    id: 'actions',
+    header: 'Actions',
     cell: ({ row }) => {
       const workflow = row.original;
 

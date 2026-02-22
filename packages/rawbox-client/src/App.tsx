@@ -1,9 +1,9 @@
-import { Outlet } from "react-router";
+import { Outlet } from 'react-router';
 
-import "./App.css";
-import AppSidebar from "./components/AppSidebar";
-import { SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
-import { Toaster } from "sonner";
+import './App.css';
+import AppSidebar from './components/AppSidebar';
+import { SidebarProvider, SidebarTrigger } from './components/ui/sidebar';
+import { Toaster } from 'sonner';
 
 function App() {
   return (

@@ -1,17 +1,17 @@
-import type { Step } from "rawbox-runner";
-import { useEffect, useState } from "react";
-import { useParams } from "react-router";
-import { toast } from "sonner";
+import type { Step } from 'rawbox-runner';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router';
+import { toast } from 'sonner';
 
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 import {
   useGetWorkflowsByIdQuery,
   usePatchWorkflowsByIdMutation,
-} from "@/redux/rawbox-api";
-import StepCreateSection from "./StepCreateSection";
-import StepDndSection from "./StepDndSection";
-import { type SortableRowProps } from "./SortableRow";
-import { WorkflowDescription } from "./WorkflowDescription";
+} from '@/redux/rawbox-api';
+import StepCreateSection from './StepCreateSection';
+import StepDndSection from './StepDndSection';
+import { type SortableRowProps } from './SortableRow';
+import { WorkflowDescription } from './WorkflowDescription';
 
 export default function StepListEditPage() {
   const { id: workflowId } = useParams<{ id: string }>();
@@ -52,9 +52,9 @@ export default function StepListEditPage() {
           stepList,
         },
       }).unwrap();
-      toast.success("Workflow saved successfully!");
+      toast.success('Workflow saved successfully!');
     } catch (err) {
-      toast.error("Failed to save workflow.");
+      toast.error('Failed to save workflow.');
       console.error(err);
     }
   };
@@ -77,7 +77,7 @@ export default function StepListEditPage() {
             disabled={isSaving}
             className="text-green-600 my-4"
           >
-            {isSaving ? "Saving..." : "Save"}
+            {isSaving ? 'Saving...' : 'Save'}
           </Button>
           <Button
             type="submit"

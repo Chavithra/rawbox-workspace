@@ -7,16 +7,16 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-} from "@dnd-kit/core";
+} from '@dnd-kit/core';
 import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+} from '@dnd-kit/sortable';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 
-import { type SortableRowProps, SortableRow } from "./SortableRow";
+import { type SortableRowProps, SortableRow } from './SortableRow';
 
 interface StepDndSectionProps {
   sortableRowPropsList: SortableRowProps[];
@@ -45,7 +45,7 @@ export default function StepDndSection({
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   function handleDragEnd(event: DragEndEvent) {
@@ -55,9 +55,9 @@ export default function StepDndSection({
       const oldIndex = active.data.current?.sortable?.index;
       const newIndex = over.data.current?.sortable?.index;
 
-      if (typeof oldIndex == "number" && typeof newIndex == "number") {
+      if (typeof oldIndex == 'number' && typeof newIndex == 'number') {
         setSortableRowPropsList((steps) =>
-          arrayMove(steps, oldIndex, newIndex)
+          arrayMove(steps, oldIndex, newIndex),
         );
       }
     }

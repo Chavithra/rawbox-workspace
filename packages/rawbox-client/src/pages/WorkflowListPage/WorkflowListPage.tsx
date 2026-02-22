@@ -1,13 +1,13 @@
-import { useMemo } from "react";
-import { useNavigate } from "react-router";
+import { useMemo } from 'react';
+import { useNavigate } from 'react-router';
 
-import { Button } from "@/components/ui/button";
-import { columns, type WorkflowForList } from "./columns";
-import { DataTable } from "@/components/ui/data-table";
+import { Button } from '@/components/ui/button';
+import { columns, type WorkflowForList } from './columns';
+import { DataTable } from '@/components/ui/data-table';
 import {
   useGetWorkflowsQuery,
   useGetWorkspacesQuery,
-} from "@/redux/rawbox-api";
+} from '@/redux/rawbox-api';
 
 export default function WorkflowListPage() {
   const {
@@ -55,7 +55,7 @@ export default function WorkflowListPage() {
 
         <div className="my-2">
           <Button
-            onClick={() => navigate("/WorkflowCreatePage")}
+            onClick={() => navigate('/WorkflowCreatePage')}
             className="w-full text-indigo-600"
           >
             Create Workflow

@@ -1,3 +1,3 @@
-import WorkflowListPage from "./WorkflowListPage";
+import WorkflowListPage from './WorkflowListPage';
 
 export default WorkflowListPage;

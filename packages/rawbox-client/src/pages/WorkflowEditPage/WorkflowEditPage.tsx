@@ -1,21 +1,21 @@
-import { useNavigate, useParams } from "react-router";
-import { useForm } from "react-hook-form";
-import { useEffect } from "react";
-import { typeboxResolver } from "@hookform/resolvers/typebox";
-import { TypeCompiler } from "@sinclair/typebox/compiler";
+import { useNavigate, useParams } from 'react-router';
+import { useForm } from 'react-hook-form';
+import { useEffect } from 'react';
+import { typeboxResolver } from '@hookform/resolvers/typebox';
+import { TypeCompiler } from '@sinclair/typebox/compiler';
 
 import {
   useDeleteWorkflowsByIdMutation,
   useGetWorkflowsByIdQuery,
   usePatchWorkflowsByIdMutation,
-} from "@/redux/rawbox-api";
-import { PatchWorkflowsByIdApiArg } from "@/typebox/rawbox-api-schemas";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from '@/redux/rawbox-api';
+import { PatchWorkflowsByIdApiArg } from '@/typebox/rawbox-api-schemas';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const PatchWorkflowsByIdApiArgCheck = TypeCompiler.Compile(
-  PatchWorkflowsByIdApiArg
+  PatchWorkflowsByIdApiArg,
 );
 
 export default function WorkflowEditPage() {
@@ -47,30 +47,30 @@ export default function WorkflowEditPage() {
   const onSubmit = async (inputs: PatchWorkflowsByIdApiArg) => {
     try {
       await updateWorkflow(inputs).unwrap();
-      navigate("/WorkflowListPage");
+      navigate('/WorkflowListPage');
     } catch (error) {
-      console.error("Failed to update workflow:", error);
-      alert("Failed to update workflow. Please try again.");
+      console.error('Failed to update workflow:', error);
+      alert('Failed to update workflow. Please try again.');
     }
   };
 
   const onInvalid = (errors: object) => {
-    console.error("Form validation errors:", errors);
-    alert("Form is invalid. Please check the console for details.");
+    console.error('Form validation errors:', errors);
+    alert('Form is invalid. Please check the console for details.');
   };
 
   const onCancel = async () => {
-    navigate("/WorkflowListPage");
+    navigate('/WorkflowListPage');
   };
 
   const onDelete = async () => {
-    if (window.confirm("Are you sure you want to delete this workflow?")) {
+    if (window.confirm('Are you sure you want to delete this workflow?')) {
       try {
         await deleteWorkflow({ id: workflowId! }).unwrap();
-        navigate("/WorkflowListPage");
+        navigate('/WorkflowListPage');
       } catch (error) {
-        console.error("Failed to delete workflow:", error);
-        alert("Failed to delete workflow. Please try again.");
+        console.error('Failed to delete workflow:', error);
+        alert('Failed to delete workflow. Please try again.');
       }
     }
   };
@@ -104,7 +104,7 @@ export default function WorkflowEditPage() {
             <Input
               id="alias"
               className="mt-1"
-              {...form.register("body.alias")}
+              {...form.register('body.alias')}
             />
             {form.formState.errors.body?.alias && (
               <p className="mt-2 text-red-600">
@@ -119,7 +119,7 @@ export default function WorkflowEditPage() {
               disabled={isLoading || isDeleting}
               className="text-indigo-600"
             >
-              {isLoading ? "Editing..." : "Edit"}
+              {isLoading ? 'Editing...' : 'Edit'}
             </Button>
 
             <Button
@@ -148,7 +148,7 @@ export default function WorkflowEditPage() {
               disabled={isLoading || isDeleting}
               className="text-red-600"
             >
-              {isDeleting ? "Deleting..." : "Delete"}
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </Button>
           </div>
         </form>

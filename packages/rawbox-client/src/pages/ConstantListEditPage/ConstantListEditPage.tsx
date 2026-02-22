@@ -1,16 +1,16 @@
-import { useParams } from "react-router";
-import { toast } from "sonner";
+import { useParams } from 'react-router';
+import { toast } from 'sonner';
 
 import {
   useGetConstantsQuery,
   useGetWorkspacesByIdQuery,
   useDeleteConstantsByWorkspaceIdAndWorkflowIdKeyIdMutation,
-} from "@/redux/rawbox-api";
+} from '@/redux/rawbox-api';
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { WorkspaceDescription } from "./WorkspaceDescription";
-import { ConstantCreateForm } from "./ConstantCreateForm";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { WorkspaceDescription } from './WorkspaceDescription';
+import { ConstantCreateForm } from './ConstantCreateForm';
 
 export default function ConstantListEditPage() {
   const { id: workspaceId } = useParams<{ id: string }>();
@@ -33,17 +33,17 @@ export default function ConstantListEditPage() {
     useDeleteConstantsByWorkspaceIdAndWorkflowIdKeyIdMutation();
 
   const handleDelete = async (workflowId: string, keyId: string) => {
-    if (window.confirm("Are you sure you want to delete this constant?")) {
+    if (window.confirm('Are you sure you want to delete this constant?')) {
       try {
         await deleteConstant({
           workspaceId: workspaceId!,
           workflowId,
           keyId,
         }).unwrap();
-        toast.success("Constant deleted successfully!");
+        toast.success('Constant deleted successfully!');
       } catch (error) {
-        console.error("Failed to delete constant:", error);
-        toast.error("Failed to delete constant. Please try again.");
+        console.error('Failed to delete constant:', error);
+        toast.error('Failed to delete constant. Please try again.');
       }
     }
   };
@@ -83,7 +83,7 @@ export default function ConstantListEditPage() {
                 disabled={isDeleting}
                 className="mt-4 text-red-600"
               >
-                {isDeleting ? "Deleting..." : "Delete"}
+                {isDeleting ? 'Deleting...' : 'Delete'}
               </Button>
             </CardContent>
           </Card>

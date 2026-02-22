@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { GetWorkflowsByIdApiResponse } from "@/redux/rawbox-api";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { GetWorkflowsByIdApiResponse } from '@/redux/rawbox-api';
 
 export interface WorkflowDescriptionProps {
   workflow: GetWorkflowsByIdApiResponse;

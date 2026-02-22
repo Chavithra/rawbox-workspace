@@ -1,3 +1,3 @@
-import StepListPage from "./StepListEditPage.tsx";
+import StepListPage from './StepListEditPage.tsx';
 
 export default StepListPage;

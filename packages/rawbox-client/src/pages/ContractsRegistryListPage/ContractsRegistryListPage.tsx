@@ -1,13 +1,13 @@
-import { toast } from "sonner";
+import { toast } from 'sonner';
 
-import { Button } from "@/components/ui/button";
-import { columns } from "./columns";
-import { DataTable } from "@/components/ui/data-table";
+import { Button } from '@/components/ui/button';
+import { columns } from './columns';
+import { DataTable } from '@/components/ui/data-table';
 import {
   useGetContractsRegistryQuery,
   usePostContractsRegistryReloadSyncMutation,
   useDeleteContractsRegistryMutation,
-} from "@/redux/rawbox-api";
+} from '@/redux/rawbox-api';
 
 export default function ContractsRegistryListPage() {
   const {
@@ -25,17 +25,17 @@ export default function ContractsRegistryListPage() {
 
   function handleReload() {
     toast.promise(contractsRegistriesReloadSync().unwrap(), {
-      loading: "Reloading contracts registry...",
-      success: "Contracts registry reloaded successfully!",
-      error: "Failed to reload contracts registry.",
+      loading: 'Reloading contracts registry...',
+      success: 'Contracts registry reloaded successfully!',
+      error: 'Failed to reload contracts registry.',
     });
   }
 
   function handleDeleteAll() {
     toast.promise(deleteAllContracts().unwrap(), {
-      loading: "Deleting all contracts...",
-      success: "All contracts deleted successfully!",
-      error: "Failed to delete all contracts.",
+      loading: 'Deleting all contracts...',
+      success: 'All contracts deleted successfully!',
+      error: 'Failed to delete all contracts.',
     });
   }
 

@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { GetWorkspacesByIdApiResponse } from "@/redux/rawbox-api";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { GetWorkspacesByIdApiResponse } from '@/redux/rawbox-api';
 
 export interface WorkspaceDescriptionProps {
   workspace: GetWorkspacesByIdApiResponse;

@@ -1,11 +1,11 @@
-import { FieldErrors, useForm } from "react-hook-form";
-import { Static, Type } from "@sinclair/typebox";
-import { toast } from "sonner";
-import { typeboxResolver } from "@hookform/resolvers/typebox";
-import { TypeCompiler } from "@sinclair/typebox/compiler";
-import { useNavigate } from "react-router";
+import { FieldErrors, useForm } from 'react-hook-form';
+import { Static, Type } from '@sinclair/typebox';
+import { toast } from 'sonner';
+import { typeboxResolver } from '@hookform/resolvers/typebox';
+import { TypeCompiler } from '@sinclair/typebox/compiler';
+import { useNavigate } from 'react-router';
 
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
@@ -13,9 +13,9 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { usePostConstantsMutation } from "@/redux/rawbox-api";
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { usePostConstantsMutation } from '@/redux/rawbox-api';
 
 export interface ConstantCreateFormProps {
   workspaceId: string;
@@ -39,10 +39,10 @@ export function ConstantCreateForm({ workspaceId }: ConstantCreateFormProps) {
   const form = useForm<FormSchema>({
     resolver: typeboxResolver(formSchemaValidator),
     defaultValues: {
-      workflowId: "",
+      workflowId: '',
       workspaceId,
-      keyId: "",
-      value: "",
+      keyId: '',
+      value: '',
     },
   });
 
@@ -50,25 +50,25 @@ export function ConstantCreateForm({ workspaceId }: ConstantCreateFormProps) {
     try {
       const body = { ...inputs, value: JSON.parse(inputs.value) };
       await createConstant({ body }).unwrap();
-      toast.success("Constant created successfully!");
+      toast.success('Constant created successfully!');
       form.reset();
     } catch (error) {
-      console.error("Failed to create constant:", error);
+      console.error('Failed to create constant:', error);
       if (error instanceof SyntaxError) {
-        toast.error("Failed to create constant: Value is not valid JSON.");
+        toast.error('Failed to create constant: Value is not valid JSON.');
       } else {
-        toast.error("Failed to create constant. Please try again.");
+        toast.error('Failed to create constant. Please try again.');
       }
     }
   };
 
   const onInvalid = (errors: FieldErrors<FormSchema>) => {
-    console.error("Form validation errors:", errors);
-    toast.error("Form is invalid. Please check the console for details.");
+    console.error('Form validation errors:', errors);
+    toast.error('Form is invalid. Please check the console for details.');
   };
 
   const onCancel = () => {
-    navigate("/WorkspaceListPage");
+    navigate('/WorkspaceListPage');
   };
 
   return (
@@ -128,7 +128,7 @@ export function ConstantCreateForm({ workspaceId }: ConstantCreateFormProps) {
                 disabled={isLoading}
                 className="text-indigo-600"
               >
-                {isLoading ? "Creating..." : "Create"}
+                {isLoading ? 'Creating...' : 'Create'}
               </Button>
 
               <Button

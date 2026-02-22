@@ -1,10 +1,10 @@
-import { typeboxResolver } from "@hookform/resolvers/typebox";
-import { TypeCompiler } from "@sinclair/typebox/compiler";
-import { FieldErrors, useForm } from "react-hook-form";
-import { useNavigate } from "react-router";
-import { toast } from "sonner";
+import { typeboxResolver } from '@hookform/resolvers/typebox';
+import { TypeCompiler } from '@sinclair/typebox/compiler';
+import { FieldErrors, useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router';
+import { toast } from 'sonner';
 
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
@@ -12,11 +12,11 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { PostWorkflowsApiArg } from "@/typebox/rawbox-api-schemas";
-import { usePostWorkflowsMutation } from "@/redux/rawbox-api";
-import { WorkspacesComboboxForm } from "./WorkspacesComboboxForm";
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { PostWorkflowsApiArg } from '@/typebox/rawbox-api-schemas';
+import { usePostWorkflowsMutation } from '@/redux/rawbox-api';
+import { WorkspacesComboboxForm } from './WorkspacesComboboxForm';
 
 const PostWorkflowsApiArgValidator = TypeCompiler.Compile(PostWorkflowsApiArg);
 
@@ -27,8 +27,8 @@ export default function WorkflowCreatePage() {
     resolver: typeboxResolver(PostWorkflowsApiArgValidator),
     defaultValues: {
       body: {
-        alias: "",
-        workspaceId: "",
+        alias: '',
+        workspaceId: '',
         stepList: [],
       },
     },
@@ -37,21 +37,21 @@ export default function WorkflowCreatePage() {
   const onSubmit = async (inputs: PostWorkflowsApiArg) => {
     try {
       await createWorkflow(inputs).unwrap();
-      toast.success("Workflow created successfully!");
-      navigate("/WorkflowListPage");
+      toast.success('Workflow created successfully!');
+      navigate('/WorkflowListPage');
     } catch (error) {
-      console.error("Failed to create workflow:", error);
-      toast.error("Failed to create workflow. Please try again.");
+      console.error('Failed to create workflow:', error);
+      toast.error('Failed to create workflow. Please try again.');
     }
   };
 
   const onInvalid = (errors: FieldErrors<PostWorkflowsApiArg>) => {
-    console.error("Form validation errors:", errors);
-    toast.error("Form is invalid. Please check the console for details.");
+    console.error('Form validation errors:', errors);
+    toast.error('Form is invalid. Please check the console for details.');
   };
 
   const onCancel = () => {
-    navigate("/WorkflowListPage");
+    navigate('/WorkflowListPage');
   };
 
   return (
@@ -87,7 +87,7 @@ export default function WorkflowCreatePage() {
                 disabled={isLoading}
                 className="text-indigo-600"
               >
-                {isLoading ? "Creating..." : "Create"}
+                {isLoading ? 'Creating...' : 'Create'}
               </Button>
 
               <Button

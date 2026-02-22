@@ -1,9 +1,9 @@
-import { rawboxApiEmpty as api } from "./rawbox-api-empty";
+import { rawboxApiEmpty as api } from './rawbox-api-empty';
 export const addTagTypes = [
-  "contracts-registry",
-  "constant",
-  "workflow",
-  "workspace",
+  'contracts-registry',
+  'constant',
+  'workflow',
+  'workspace',
 ] as const;
 const injectedRtkApi = api
   .enhanceEndpoints({
@@ -16,14 +16,14 @@ const injectedRtkApi = api
         GetContractsRegistryApiArg
       >({
         query: () => ({ url: `/contracts-registry/` }),
-        providesTags: ["contracts-registry"],
+        providesTags: ['contracts-registry'],
       }),
       deleteContractsRegistry: build.mutation<
         DeleteContractsRegistryApiResponse,
         DeleteContractsRegistryApiArg
       >({
-        query: () => ({ url: `/contracts-registry/`, method: "DELETE" }),
-        invalidatesTags: ["contracts-registry"],
+        query: () => ({ url: `/contracts-registry/`, method: 'DELETE' }),
+        invalidatesTags: ['contracts-registry'],
       }),
       postContractsRegistryReloadSync: build.mutation<
         PostContractsRegistryReloadSyncApiResponse,
@@ -31,9 +31,9 @@ const injectedRtkApi = api
       >({
         query: () => ({
           url: `/contracts-registry/reload-sync`,
-          method: "POST",
+          method: 'POST',
         }),
-        invalidatesTags: ["contracts-registry"],
+        invalidatesTags: ['contracts-registry'],
       }),
       postContractsRegistryReloadAsync: build.mutation<
         PostContractsRegistryReloadAsyncApiResponse,
@@ -41,9 +41,9 @@ const injectedRtkApi = api
       >({
         query: () => ({
           url: `/contracts-registry/reload-async`,
-          method: "POST",
+          method: 'POST',
         }),
-        invalidatesTags: ["contracts-registry"],
+        invalidatesTags: ['contracts-registry'],
       }),
       postConstants: build.mutation<
         PostConstantsApiResponse,
@@ -51,10 +51,10 @@ const injectedRtkApi = api
       >({
         query: (queryArg) => ({
           url: `/constants/`,
-          method: "POST",
+          method: 'POST',
           body: queryArg.body,
         }),
-        invalidatesTags: ["constant"],
+        invalidatesTags: ['constant'],
       }),
       getConstants: build.query<GetConstantsApiResponse, GetConstantsApiArg>({
         query: (queryArg) => ({
@@ -64,7 +64,7 @@ const injectedRtkApi = api
             workflowId: queryArg.workflowId,
           },
         }),
-        providesTags: ["constant"],
+        providesTags: ['constant'],
       }),
       getConstantsByWorkspaceIdAndWorkflowIdKeyId: build.query<
         GetConstantsByWorkspaceIdAndWorkflowIdKeyIdApiResponse,
@@ -73,7 +73,7 @@ const injectedRtkApi = api
         query: (queryArg) => ({
           url: `/constants/${queryArg.workspaceId}/${queryArg.workflowId}/${queryArg.keyId}`,
         }),
-        providesTags: ["constant"],
+        providesTags: ['constant'],
       }),
       deleteConstantsByWorkspaceIdAndWorkflowIdKeyId: build.mutation<
         DeleteConstantsByWorkspaceIdAndWorkflowIdKeyIdApiResponse,
@@ -81,9 +81,9 @@ const injectedRtkApi = api
       >({
         query: (queryArg) => ({
           url: `/constants/${queryArg.workspaceId}/${queryArg.workflowId}/${queryArg.keyId}`,
-          method: "DELETE",
+          method: 'DELETE',
         }),
-        invalidatesTags: ["constant"],
+        invalidatesTags: ['constant'],
       }),
       patchConstantsByWorkspaceIdAndWorkflowIdKeyId: build.mutation<
         PatchConstantsByWorkspaceIdAndWorkflowIdKeyIdApiResponse,
@@ -91,10 +91,10 @@ const injectedRtkApi = api
       >({
         query: (queryArg) => ({
           url: `/constants/${queryArg.workspaceId}/${queryArg.workflowId}/${queryArg.keyId}`,
-          method: "PATCH",
+          method: 'PATCH',
           body: queryArg.body,
         }),
-        invalidatesTags: ["constant"],
+        invalidatesTags: ['constant'],
       }),
       postWorkflows: build.mutation<
         PostWorkflowsApiResponse,
@@ -102,21 +102,21 @@ const injectedRtkApi = api
       >({
         query: (queryArg) => ({
           url: `/workflows/`,
-          method: "POST",
+          method: 'POST',
           body: queryArg.body,
         }),
-        invalidatesTags: ["workflow"],
+        invalidatesTags: ['workflow'],
       }),
       getWorkflows: build.query<GetWorkflowsApiResponse, GetWorkflowsApiArg>({
         query: () => ({ url: `/workflows/` }),
-        providesTags: ["workflow"],
+        providesTags: ['workflow'],
       }),
       getWorkflowsById: build.query<
         GetWorkflowsByIdApiResponse,
         GetWorkflowsByIdApiArg
       >({
         query: (queryArg) => ({ url: `/workflows/${queryArg.id}` }),
-        providesTags: ["workflow"],
+        providesTags: ['workflow'],
       }),
       deleteWorkflowsById: build.mutation<
         DeleteWorkflowsByIdApiResponse,
@@ -124,9 +124,9 @@ const injectedRtkApi = api
       >({
         query: (queryArg) => ({
           url: `/workflows/${queryArg.id}`,
-          method: "DELETE",
+          method: 'DELETE',
         }),
-        invalidatesTags: ["workflow"],
+        invalidatesTags: ['workflow'],
       }),
       patchWorkflowsById: build.mutation<
         PatchWorkflowsByIdApiResponse,
@@ -134,10 +134,10 @@ const injectedRtkApi = api
       >({
         query: (queryArg) => ({
           url: `/workflows/${queryArg.id}`,
-          method: "PATCH",
+          method: 'PATCH',
           body: queryArg.body,
         }),
-        invalidatesTags: ["workflow"],
+        invalidatesTags: ['workflow'],
       }),
       postWorkspaces: build.mutation<
         PostWorkspacesApiResponse,
@@ -145,15 +145,15 @@ const injectedRtkApi = api
       >({
         query: (queryArg) => ({
           url: `/workspaces/`,
-          method: "POST",
+          method: 'POST',
           body: queryArg.body,
         }),
-        invalidatesTags: ["workspace"],
+        invalidatesTags: ['workspace'],
       }),
       getWorkspaces: build.query<GetWorkspacesApiResponse, GetWorkspacesApiArg>(
         {
           query: () => ({ url: `/workspaces/` }),
-          providesTags: ["workspace"],
+          providesTags: ['workspace'],
         },
       ),
       getWorkspacesById: build.query<
@@ -161,7 +161,7 @@ const injectedRtkApi = api
         GetWorkspacesByIdApiArg
       >({
         query: (queryArg) => ({ url: `/workspaces/${queryArg.id}` }),
-        providesTags: ["workspace"],
+        providesTags: ['workspace'],
       }),
       deleteWorkspacesById: build.mutation<
         DeleteWorkspacesByIdApiResponse,
@@ -169,9 +169,9 @@ const injectedRtkApi = api
       >({
         query: (queryArg) => ({
           url: `/workspaces/${queryArg.id}`,
-          method: "DELETE",
+          method: 'DELETE',
         }),
-        invalidatesTags: ["workspace"],
+        invalidatesTags: ['workspace'],
       }),
       patchWorkspacesById: build.mutation<
         PatchWorkspacesByIdApiResponse,
@@ -179,10 +179,10 @@ const injectedRtkApi = api
       >({
         query: (queryArg) => ({
           url: `/workspaces/${queryArg.id}`,
-          method: "PATCH",
+          method: 'PATCH',
           body: queryArg.body,
         }),
-        invalidatesTags: ["workspace"],
+        invalidatesTags: ['workspace'],
       }),
     }),
     overrideExisting: false,
