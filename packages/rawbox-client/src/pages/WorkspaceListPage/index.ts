@@ -1,3 +1,3 @@
-import WorkspaceListPage from "./WorkspaceListPage";
+import WorkspaceListPage from './WorkspaceListPage';
 
 export default WorkspaceListPage;

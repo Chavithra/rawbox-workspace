@@ -1,13 +1,13 @@
-import { useNavigate } from "react-router";
-import { useForm } from "react-hook-form";
-import { typeboxResolver } from "@hookform/resolvers/typebox";
-import { TypeCompiler } from "@sinclair/typebox/compiler";
+import { useNavigate } from 'react-router';
+import { useForm } from 'react-hook-form';
+import { typeboxResolver } from '@hookform/resolvers/typebox';
+import { TypeCompiler } from '@sinclair/typebox/compiler';
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { PostWorkspacesApiArg } from "@/typebox/rawbox-api-schemas";
-import { usePostWorkspacesMutation } from "@/redux/rawbox-api";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { PostWorkspacesApiArg } from '@/typebox/rawbox-api-schemas';
+import { usePostWorkspacesMutation } from '@/redux/rawbox-api';
 
 const PostWorkspacesApiArgCheck = TypeCompiler.Compile(PostWorkspacesApiArg);
 
@@ -22,7 +22,7 @@ export default function WorkspaceCreatePage() {
     resolver: typeboxResolver(PostWorkspacesApiArgCheck),
     defaultValues: {
       body: {
-        alias: "",
+        alias: '',
       },
     },
   });
@@ -32,20 +32,20 @@ export default function WorkspaceCreatePage() {
   const onSuccess = async (inputs: PostWorkspacesApiArg) => {
     try {
       await createWorkspace(inputs).unwrap();
-      navigate("/WorkspaceListPage");
+      navigate('/WorkspaceListPage');
     } catch (error) {
-      console.error("Failed to create workspace:", error);
-      alert("Failed to create workspace. Please try again.");
+      console.error('Failed to create workspace:', error);
+      alert('Failed to create workspace. Please try again.');
     }
   };
 
   const onInvalid = (errors: object) => {
-    console.error("Form validation errors:", errors);
-    alert("Form is invalid. Please check the console for details.");
+    console.error('Form validation errors:', errors);
+    alert('Form is invalid. Please check the console for details.');
   };
 
   const onCancel = async () => {
-    navigate("/WorkspaceListPage");
+    navigate('/WorkspaceListPage');
   };
 
   return (
@@ -64,7 +64,7 @@ export default function WorkspaceCreatePage() {
         >
           <div>
             <Label htmlFor="alias">Alias</Label>
-            <Input id="alias" className="mt-1" {...register("body.alias")} />
+            <Input id="alias" className="mt-1" {...register('body.alias')} />
             {errors.body?.alias && (
               <p className="mt-2 text-red-600">{errors.body.alias.message}</p>
             )}
@@ -76,7 +76,7 @@ export default function WorkspaceCreatePage() {
               disabled={isLoading}
               className="text-indigo-600"
             >
-              {isLoading ? "Creating..." : "Create"}
+              {isLoading ? 'Creating...' : 'Create'}
             </Button>
 
             <Button

@@ -1,15 +1,15 @@
-import { cwd } from "node:process";
+import { cwd } from 'node:process';
 
-import { err, ok, type Result } from "neverthrow";
+import { err, ok, type Result } from 'neverthrow';
 
 import type {
   Contract,
   ContractsRegistry,
   ContractsRegistryPath,
-} from "./contracts-registry.js";
-import { ContractsRegistryLoader } from "./contracts-registry-loader.js";
-import { getDefinitionPathList } from "./contracts-registry-utils.js";
-import type { DefinitionLocation } from "./definition.js";
+} from './contracts-registry.js';
+import { ContractsRegistryLoader } from './contracts-registry-loader.js';
+import { getDefinitionPathList } from './contracts-registry-utils.js';
+import type { DefinitionLocation } from './definition.js';
 
 /**
  * Caches ContractsRegistry instances to avoid redundant dynamic imports.
@@ -24,14 +24,14 @@ export class ContractsRegistryCache {
    */
   public static async build(
     startFolderPath: string = cwd(),
-    operationConfigFileName: string = "rawbox.config.json"
+    operationConfigFileName: string = 'rawbox.config.json',
   ) {
     let result = new ContractsRegistryCache();
 
     const contractsRegistryList =
       await ContractsRegistryLoader.loadValidContractsRegistryList(
         startFolderPath,
-        operationConfigFileName
+        operationConfigFileName,
       );
 
     contractsRegistryList.map((contractsRegistry) => {
@@ -49,7 +49,7 @@ export class ContractsRegistryCache {
     private readonly registryMap: Map<
       ContractsRegistryPath,
       ContractsRegistry<any>
-    > = new Map<ContractsRegistryPath, ContractsRegistry<any>>()
+    > = new Map<ContractsRegistryPath, ContractsRegistry<any>>(),
   ) {}
 
   /**
@@ -59,7 +59,7 @@ export class ContractsRegistryCache {
   public addContractsRegistry(contractsRegistry: ContractsRegistry<any>): void {
     this.registryMap.set(
       contractsRegistry.contractsRegistryPath,
-      contractsRegistry
+      contractsRegistry,
     );
   }
 
@@ -69,7 +69,7 @@ export class ContractsRegistryCache {
    * @returns The ContractsRegistry instance if found, otherwise undefined.
    */
   public getContractsRegistry<TContract extends Contract>(
-    contractsRegistryPath: ContractsRegistryPath
+    contractsRegistryPath: ContractsRegistryPath,
   ): ContractsRegistry<TContract> | undefined {
     return this.registryMap.get(contractsRegistryPath) as
       | ContractsRegistry<TContract>
@@ -84,7 +84,7 @@ export class ContractsRegistryCache {
    */
   public async getOrLoadSignaturesRegistry(
     contractsRegistryPath: ContractsRegistryPath,
-    forceReload: boolean = false
+    forceReload: boolean = false,
   ): Promise<Result<ContractsRegistry<any>, string>> {
     const registryMap = this.registryMap;
 
@@ -92,7 +92,7 @@ export class ContractsRegistryCache {
 
     const resultOfLoadRegistry = await this.loadSignaturesRegistry(
       contractsRegistryPath,
-      forceReload
+      forceReload,
     );
 
     if (resultOfLoadRegistry.isOk()) {
@@ -102,7 +102,7 @@ export class ContractsRegistryCache {
         result = ok(registry);
       } else {
         result = err(
-          `SignatureRegistry at '${contractsRegistryPath}' not found.`
+          `SignatureRegistry at '${contractsRegistryPath}' not found.`,
         );
       }
     } else {
@@ -141,7 +141,7 @@ export class ContractsRegistryCache {
    */
   public async loadSignaturesRegistry(
     registryPath: ContractsRegistryPath,
-    forceReload: boolean = false
+    forceReload: boolean = false,
   ): Promise<Result<void, string>> {
     const registryMap = this.registryMap;
 
@@ -172,7 +172,7 @@ export class ContractsRegistryCache {
         getDefinitionPathList(contractsRegistry).map((definitionPath) => ({
           contractsRegistryPath: contractsRegistry.contractsRegistryPath,
           definitionPath: definitionPath,
-        }))
+        })),
     );
 
     return result;

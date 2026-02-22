@@ -1,12 +1,12 @@
-import * as React from "react";
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import * as React from 'react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   AlertTriangle,
   ArrowRight,
   CheckCircle,
   ChevronsUpDown,
-} from "lucide-react";
+} from 'lucide-react';
 
 import {
   Card,
@@ -14,8 +14,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import type { BoxLocationRecord, Step } from "rawbox-runner";
+} from '@/components/ui/card';
+import type { BoxLocationRecord, Step } from 'rawbox-runner';
 
 export interface SortableRowProps {
   step: Step;
@@ -56,7 +56,7 @@ function LocationRecordDisplay({
                   {value.key.id}
                 </dd>
               </React.Fragment>
-            ) : null
+            ) : null,
           )}
         </dl>
       </div>

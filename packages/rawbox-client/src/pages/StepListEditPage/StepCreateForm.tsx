@@ -1,16 +1,16 @@
-import { toast } from "sonner";
-import { Type, type Static } from "@sinclair/typebox";
-import { typeboxResolver } from "@hookform/resolvers/typebox";
-import { TypeCompiler } from "@sinclair/typebox/compiler";
-import { useEffect, useMemo } from "react";
-import { useForm, type FieldErrors } from "react-hook-form";
+import { toast } from 'sonner';
+import { Type, type Static } from '@sinclair/typebox';
+import { typeboxResolver } from '@hookform/resolvers/typebox';
+import { TypeCompiler } from '@sinclair/typebox/compiler';
+import { useEffect, useMemo } from 'react';
+import { useForm, type FieldErrors } from 'react-hook-form';
 
-import { type BoxLocationRecord, type Step } from "rawbox-runner";
-import { ControlFlowContract } from "rawbox-default-plugins/control-flow-definition";
-import { OperationContract } from "rawbox-plugin/operation-definition";
-import { createSimpleBoxLocation } from "rawbox-store/box-store-utils";
+import { type BoxLocationRecord, type Step } from 'rawbox-runner';
+import { ControlFlowContract } from 'rawbox-default-plugins/control-flow-definition';
+import { OperationContract } from 'rawbox-plugin/operation-definition';
+import { createSimpleBoxLocation } from 'rawbox-store/box-store-utils';
 
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
@@ -18,16 +18,16 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { SortableRowProps } from "./SortableRow";
+} from '@/components/ui/select';
+import { SortableRowProps } from './SortableRow';
 
 export interface ContractsRecord {
   contractsRegistryPath: string;
@@ -61,20 +61,20 @@ interface StepCreateFormProps {
 }
 
 function convertToBoxLocationRecord(
-  locationRecord: LocationRecord
+  locationRecord: LocationRecord,
 ): BoxLocationRecord {
   return Object.entries(locationRecord).reduce(
     (acc, [parameterName, BoxLocationKeyId]) => {
       if (BoxLocationKeyId) {
         acc[parameterName] = createSimpleBoxLocation(
-          "env1",
-          "dbi1",
-          BoxLocationKeyId
+          'env1',
+          'dbi1',
+          BoxLocationKeyId,
         );
       }
       return acc;
     },
-    {} as BoxLocationRecord
+    {} as BoxLocationRecord,
   );
 }
 
@@ -87,8 +87,8 @@ export function StepCreateForm({
     resolver: typeboxResolver(formSchemaValidator),
     defaultValues: {
       definitionLocation: {
-        contractsRegistryPath: "",
-        definitionPath: "",
+        contractsRegistryPath: '',
+        definitionPath: '',
       },
       inputLocationRecord: {},
       outputLocationRecord: {},
@@ -99,15 +99,15 @@ export function StepCreateForm({
 
   const { resetField } = form;
   const contractsRegistryPathValue = form.watch(
-    "definitionLocation.contractsRegistryPath"
+    'definitionLocation.contractsRegistryPath',
   );
-  const definitionPathValue = form.watch("definitionLocation.definitionPath");
+  const definitionPathValue = form.watch('definitionLocation.definitionPath');
 
   const definitionPathOptions = useMemo(() => {
     const contractsRecord =
       contractsRecordMap[contractsRegistryPathValue]?.contractsRecord;
 
-    if (contractsRecord && typeof contractsRecord === "object") {
+    if (contractsRecord && typeof contractsRecord === 'object') {
       return Object.keys(contractsRecord);
     }
 
@@ -140,7 +140,7 @@ export function StepCreateForm({
         definitionPathValue
       ];
 
-    if (contract && contract.type == "operation") {
+    if (contract && contract.type == 'operation') {
       const outputSchema = contract.outputSchema;
       result = Object.keys(outputSchema.properties);
     } else {
@@ -169,16 +169,16 @@ export function StepCreateForm({
   }, [contractsRecordMap, contractsRegistryPathValue, definitionPathValue]);
 
   useEffect(() => {
-    resetField("definitionLocation.definitionPath", { defaultValue: "" });
-    resetField("inputLocationRecord", { defaultValue: {} });
-    resetField("outputLocationRecord", { defaultValue: {} });
-    resetField("errorLocationRecord", { defaultValue: {} });
-    resetField("stepLabel", { defaultValue: undefined });
+    resetField('definitionLocation.definitionPath', { defaultValue: '' });
+    resetField('inputLocationRecord', { defaultValue: {} });
+    resetField('outputLocationRecord', { defaultValue: {} });
+    resetField('errorLocationRecord', { defaultValue: {} });
+    resetField('stepLabel', { defaultValue: undefined });
   }, [contractsRegistryPathValue, resetField]);
 
   const onInvalid = (e: FieldErrors<BaseFormSchema>) => {
     console.log(e);
-    toast.error("Form is invalid. Please check the fields and try again.");
+    toast.error('Form is invalid. Please check the fields and try again.');
   };
 
   const onReset = () => {
@@ -210,10 +210,10 @@ export function StepCreateForm({
       },
     ]);
 
-    console.log("inputs", inputs);
-    console.log("step", step);
+    console.log('inputs', inputs);
+    console.log('step', step);
 
-    toast.success("Step created successfully!");
+    toast.success('Step created successfully!');
     form.reset();
   };
 
@@ -244,7 +244,7 @@ export function StepCreateForm({
                           >
                             {contractsRegistryPath}
                           </SelectItem>
-                        )
+                        ),
                       )}
                     </SelectContent>
                   </Select>
@@ -297,7 +297,7 @@ export function StepCreateForm({
                     <Input
                       placeholder=""
                       {...field}
-                      value={field.value ?? ""}
+                      value={field.value ?? ''}
                     />
                   </FormControl>
                   <FormMessage />
@@ -320,7 +320,7 @@ export function StepCreateForm({
                     <Input
                       placeholder=""
                       {...field}
-                      value={field.value ?? ""}
+                      value={field.value ?? ''}
                     />
                   </FormControl>
                   <FormMessage />
@@ -343,7 +343,7 @@ export function StepCreateForm({
                     <Input
                       placeholder=""
                       {...field}
-                      value={field.value ?? ""}
+                      value={field.value ?? ''}
                     />
                   </FormControl>
                   <FormMessage />

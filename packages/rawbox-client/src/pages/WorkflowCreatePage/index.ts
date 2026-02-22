@@ -1,3 +1,3 @@
-import WorkflowCreatePage from "./WorkflowCreatePage";
+import WorkflowCreatePage from './WorkflowCreatePage';
 
 export default WorkflowCreatePage;

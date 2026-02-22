@@ -5,4 +5,4 @@ export {
   DefinitionLocation,
   Identifiable,
   Step,
-} from "./workflow.js";
+} from './workflow.js';

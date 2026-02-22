@@ -1,21 +1,21 @@
-import { useNavigate, useParams } from "react-router";
-import { useForm } from "react-hook-form";
-import { useEffect } from "react";
-import { typeboxResolver } from "@hookform/resolvers/typebox";
-import { TypeCompiler } from "@sinclair/typebox/compiler";
+import { useNavigate, useParams } from 'react-router';
+import { useForm } from 'react-hook-form';
+import { useEffect } from 'react';
+import { typeboxResolver } from '@hookform/resolvers/typebox';
+import { TypeCompiler } from '@sinclair/typebox/compiler';
 
 import {
   useDeleteWorkspacesByIdMutation,
   useGetWorkspacesByIdQuery,
   usePatchWorkspacesByIdMutation,
-} from "@/redux/rawbox-api";
-import { PatchWorkspacesByIdApiArg } from "@/typebox/rawbox-api-schemas";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from '@/redux/rawbox-api';
+import { PatchWorkspacesByIdApiArg } from '@/typebox/rawbox-api-schemas';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const PatchWorkspacesByIdApiArgCheck = TypeCompiler.Compile(
-  PatchWorkspacesByIdApiArg
+  PatchWorkspacesByIdApiArg,
 );
 
 export default function WorkspaceEditPage() {
@@ -52,30 +52,30 @@ export default function WorkspaceEditPage() {
   const onSubmit = async (inputs: PatchWorkspacesByIdApiArg) => {
     try {
       await updateWorkspace(inputs).unwrap();
-      navigate("/WorkspaceListPage");
+      navigate('/WorkspaceListPage');
     } catch (error) {
-      console.error("Failed to update workspace:", error);
-      alert("Failed to update workspace. Please try again.");
+      console.error('Failed to update workspace:', error);
+      alert('Failed to update workspace. Please try again.');
     }
   };
 
   const onInvalid = (errors: object) => {
-    console.error("Form validation errors:", errors);
-    alert("Form is invalid. Please check the console for details.");
+    console.error('Form validation errors:', errors);
+    alert('Form is invalid. Please check the console for details.');
   };
 
   const onCancel = async () => {
-    navigate("/WorkspaceListPage");
+    navigate('/WorkspaceListPage');
   };
 
   const onDelete = async () => {
-    if (window.confirm("Are you sure you want to delete this workspace?")) {
+    if (window.confirm('Are you sure you want to delete this workspace?')) {
       try {
         await deleteWorkspace({ id: workspaceId! }).unwrap();
-        navigate("/WorkspaceListPage");
+        navigate('/WorkspaceListPage');
       } catch (error) {
-        console.error("Failed to delete workspace:", error);
-        alert("Failed to delete workspace. Please try again.");
+        console.error('Failed to delete workspace:', error);
+        alert('Failed to delete workspace. Please try again.');
       }
     }
   };
@@ -102,13 +102,13 @@ export default function WorkspaceEditPage() {
               id="id"
               disabled
               type="text"
-              {...register("id")}
+              {...register('id')}
               className="mt-1"
             />
           </div>
           <div>
             <Label htmlFor="alias">Alias</Label>
-            <Input id="alias" className="mt-1" {...register("body.alias")} />
+            <Input id="alias" className="mt-1" {...register('body.alias')} />
             {errors.body?.alias && (
               <p className="mt-2 text-red-600">{errors.body.alias.message}</p>
             )}
@@ -120,7 +120,7 @@ export default function WorkspaceEditPage() {
               disabled={isLoading || isDeleting}
               className="text-indigo-600"
             >
-              {isLoading ? "Editing..." : "Edit"}
+              {isLoading ? 'Editing...' : 'Edit'}
             </Button>
 
             <Button
@@ -149,7 +149,7 @@ export default function WorkspaceEditPage() {
               disabled={isLoading || isDeleting}
               className="text-red-600"
             >
-              {isDeleting ? "Deleting..." : "Delete"}
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </Button>
           </div>
         </form>

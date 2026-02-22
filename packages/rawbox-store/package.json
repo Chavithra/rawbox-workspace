@@ -17,7 +17,7 @@
   "keywords": [],
   "author": "Chavithra <chavithra@gmail.com>",
   "type": "module",
-  "license": "ISC",
+  "license": "BSD-3-Clause",
   "description": "",
   "devDependencies": {
     "@types/benchmark": "^2.1.5",

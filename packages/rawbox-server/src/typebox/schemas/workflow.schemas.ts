@@ -1,11 +1,11 @@
-import { Static } from "@sinclair/typebox";
+import { Static } from '@sinclair/typebox';
 import {
   createInsertSchema,
   createSelectSchema,
   createUpdateSchema,
-} from "drizzle-typebox";
+} from 'drizzle-typebox';
 
-import { workflowTable } from "../../drizzle/tables/workflow.table.js";
+import { workflowTable } from '../../drizzle/tables/workflow.table.js';
 
 export const WorkflowSelectSchema = createSelectSchema(workflowTable);
 export type WorkflowSelectSchema = Static<typeof WorkflowSelectSchema>;

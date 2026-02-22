@@ -1,7 +1,7 @@
-import type { Static, TObject } from "@sinclair/typebox";
-import type { Result } from "neverthrow";
+import type { Static, TObject } from '@sinclair/typebox';
+import type { Result } from 'neverthrow';
 
-import type { Contract, ContractsRegistryPath } from "./contracts-registry.js";
+import type { Contract, ContractsRegistryPath } from './contracts-registry.js';
 
 export type DefinitionPath = string;
 
@@ -19,7 +19,7 @@ export type Handler<
   TInput extends TObject,
   TOutput extends TObject,
 > = (
-  input: Static<TInput>
+  input: Static<TInput>,
 ) => MaybeAsync<Result<Static<TOutput>, Static<TError>>>;
 
 export type ValidatedHandler<
@@ -27,7 +27,7 @@ export type ValidatedHandler<
   TInput extends TObject,
   TOutput extends TObject,
 > = (
-  input: Static<TInput>
+  input: Static<TInput>,
 ) => MaybeAsync<Result<Static<TOutput>, Static<TError> | ValidationError>>;
 
 export interface Definition<
@@ -45,5 +45,5 @@ export type DefinitionLoader<
   TContract extends Contract,
   TDefinition extends Definition<TContract>,
 > = (
-  definitionLocation: DefinitionLocation
+  definitionLocation: DefinitionLocation,
 ) => Promise<Result<TDefinition, string>>;

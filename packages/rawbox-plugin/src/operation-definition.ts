@@ -1,10 +1,10 @@
-import { err, ok } from "neverthrow";
-import { TObject } from "@sinclair/typebox";
-import { TypeCompiler } from "@sinclair/typebox/compiler";
+import { err, ok } from 'neverthrow';
+import { TObject } from '@sinclair/typebox';
+import { TypeCompiler } from '@sinclair/typebox/compiler';
 
-import type { Definition, Handler, ValidatedHandler } from "./definition.js";
-import type { Contract } from "./contracts-registry.js";
-import { exportSetupContractsRegistry } from "./contracts-registry-utils.js";
+import type { Definition, Handler, ValidatedHandler } from './definition.js';
+import type { Contract } from './contracts-registry.js';
+import { exportSetupContractsRegistry } from './contracts-registry-utils.js';
 
 // DEFINE OPERATION_CONTRACT
 export const setupOperationContractsRegistry =
@@ -15,7 +15,7 @@ export function setupOperationContract<
   InputSchema extends TObject = TObject,
   OutputSchema extends TObject = TObject,
 >(
-  operationContract: OperationContract<ErrorSchema, InputSchema, OutputSchema>
+  operationContract: OperationContract<ErrorSchema, InputSchema, OutputSchema>,
 ) {
   return operationContract;
 }
@@ -25,7 +25,7 @@ export interface OperationContract<
   InputSchema extends TObject = TObject,
   OutputSchema extends TObject = TObject,
 > extends Contract {
-  type: "operation";
+  type: 'operation';
   description: string;
   errorSchema: ErrorSchema;
   inputSchema: InputSchema;
@@ -34,17 +34,17 @@ export interface OperationContract<
 }
 
 export function operationContractGuard(
-  contract: object
+  contract: object,
 ): contract is OperationContract {
   return (
-    typeof contract === "object" &&
+    typeof contract === 'object' &&
     contract !== null &&
-    "type" in contract &&
-    contract.type === "operation" &&
-    "inputSchema" in contract &&
-    "outputSchema" in contract &&
-    "errorSchema" in contract &&
-    "version" in contract
+    'type' in contract &&
+    contract.type === 'operation' &&
+    'inputSchema' in contract &&
+    'outputSchema' in contract &&
+    'errorSchema' in contract &&
+    'version' in contract
   );
 }
 
@@ -63,32 +63,31 @@ export interface HandlerValidatorSet<
   errorValidator: HandlerValidator<TError>;
 }
 
-export class OperationDefinition<TContract extends OperationContract>
-  implements
-    Definition<
-      TContract,
-      TContract["errorSchema"],
-      TContract["inputSchema"],
-      TContract["outputSchema"]
-    >
-{
+export class OperationDefinition<
+  TContract extends OperationContract,
+> implements Definition<
+  TContract,
+  TContract['errorSchema'],
+  TContract['inputSchema'],
+  TContract['outputSchema']
+> {
   public readonly handlerValidatorSet: HandlerValidatorSet<
-    TContract["errorSchema"],
-    TContract["inputSchema"],
-    TContract["outputSchema"]
+    TContract['errorSchema'],
+    TContract['inputSchema'],
+    TContract['outputSchema']
   >;
   public readonly validatedHandler: ValidatedHandler<
-    TContract["errorSchema"],
-    TContract["inputSchema"],
-    TContract["outputSchema"]
+    TContract['errorSchema'],
+    TContract['inputSchema'],
+    TContract['outputSchema']
   >;
 
   public static buildHandlerValidatorSet<TContract extends OperationContract>(
-    contract: TContract
+    contract: TContract,
   ): HandlerValidatorSet<
-    TContract["errorSchema"],
-    TContract["inputSchema"],
-    TContract["outputSchema"]
+    TContract['errorSchema'],
+    TContract['inputSchema'],
+    TContract['outputSchema']
   > {
     return {
       inputValidator: TypeCompiler.Compile(contract.inputSchema),
@@ -103,7 +102,7 @@ export class OperationDefinition<TContract extends OperationContract>
     TError extends TObject,
   >(
     handler: Handler<TError, TInput, TOutput>,
-    validatorSet: HandlerValidatorSet<TError, TInput, TOutput>
+    validatorSet: HandlerValidatorSet<TError, TInput, TOutput>,
   ): ValidatedHandler<TError, TInput, TOutput> {
     return async (input) => {
       const { inputValidator, outputValidator, errorValidator } = validatorSet;
@@ -113,8 +112,8 @@ export class OperationDefinition<TContract extends OperationContract>
         const errors = Array.from(inputValidator.Errors(input));
         return err(
           new Error(
-            `Input validation failed: ${JSON.stringify(errors, null, 2)}`
-          )
+            `Input validation failed: ${JSON.stringify(errors, null, 2)}`,
+          ),
         );
       }
 
@@ -122,7 +121,7 @@ export class OperationDefinition<TContract extends OperationContract>
       try {
         output = await handler(input);
       } catch (error) {
-        return err(new Error("Handler execution failed: " + error));
+        return err(new Error('Handler execution failed: ' + error));
       }
 
       if (output.isErr()) {
@@ -132,8 +131,8 @@ export class OperationDefinition<TContract extends OperationContract>
           const errors = Array.from(errorValidator.Errors(errorValue));
           return err(
             new Error(
-              `Error validation failed: ${JSON.stringify(errors, null, 2)}`
-            )
+              `Error validation failed: ${JSON.stringify(errors, null, 2)}`,
+            ),
           );
         }
         return output;
@@ -145,8 +144,8 @@ export class OperationDefinition<TContract extends OperationContract>
         const errors = Array.from(outputValidator.Errors(outputs));
         return err(
           new Error(
-            `Output validation failed: ${JSON.stringify(errors, null, 2)}`
-          )
+            `Output validation failed: ${JSON.stringify(errors, null, 2)}`,
+          ),
         );
       }
 
@@ -157,16 +156,16 @@ export class OperationDefinition<TContract extends OperationContract>
   public constructor(
     public readonly contract: TContract,
     public readonly handler: Handler<
-      TContract["errorSchema"],
-      TContract["inputSchema"],
-      TContract["outputSchema"]
-    >
+      TContract['errorSchema'],
+      TContract['inputSchema'],
+      TContract['outputSchema']
+    >,
   ) {
     this.handlerValidatorSet =
       OperationDefinition.buildHandlerValidatorSet(contract);
     this.validatedHandler = OperationDefinition.buildValidatedHandler(
       this.handler,
-      this.handlerValidatorSet
+      this.handlerValidatorSet,
     );
   }
 }

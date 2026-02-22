@@ -7,29 +7,29 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "./ui/sidebar";
-import { Home, Bot, DatabaseZap, Book } from "lucide-react";
-import { Link } from "react-router";
+} from './ui/sidebar';
+import { Home, Bot, DatabaseZap, Book } from 'lucide-react';
+import { Link } from 'react-router';
 
 const items = [
   {
-    title: "Home",
-    url: "/",
+    title: 'Home',
+    url: '/',
     icon: Home,
   },
   {
-    title: "Contracts",
-    url: "/ContractsRegistryListPage",
+    title: 'Contracts',
+    url: '/ContractsRegistryListPage',
     icon: Book,
   },
   {
-    title: "Workflows",
-    url: "/WorkflowListPage",
+    title: 'Workflows',
+    url: '/WorkflowListPage',
     icon: Bot,
   },
   {
-    title: "Workspaces",
-    url: "/WorkspaceListPage",
+    title: 'Workspaces',
+    url: '/WorkspaceListPage',
     icon: DatabaseZap,
   },
 ];

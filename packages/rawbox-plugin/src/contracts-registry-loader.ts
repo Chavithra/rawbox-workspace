@@ -1,24 +1,24 @@
-import { cwd } from "node:process";
-import path from "node:path";
+import { cwd } from 'node:process';
+import path from 'node:path';
 
-import { ok, err, type Result } from "neverthrow";
+import { ok, err, type Result } from 'neverthrow';
 
-import { isAbsolute } from "./entries-utils.js";
-import { RawboxConfigLoader } from "./rawbox-config-loader.js";
+import { isAbsolute } from './entries-utils.js';
+import { RawboxConfigLoader } from './rawbox-config-loader.js';
 import type {
   ContractsRegistry,
   ContractsRegistryPath,
-} from "./contracts-registry.js";
+} from './contracts-registry.js';
 
 export class ContractsRegistryLoader {
   public static async loadContractsRegistryPathList(
     startFolderPath: string = cwd(),
-    rawboxConfigFileName: string = "rawbox.config.json"
+    rawboxConfigFileName: string = 'rawbox.config.json',
   ): Promise<ContractsRegistryPath[]> {
     const rawboxConfigFileList =
       await RawboxConfigLoader.loadValidRawboxConfigFileList(
         startFolderPath,
-        rawboxConfigFileName
+        rawboxConfigFileName,
       );
 
     const contractsRegistryPathList = rawboxConfigFileList.reduce(
@@ -34,19 +34,19 @@ export class ContractsRegistryLoader {
               ? contractsRegistryPath
               : path.join(rawboxConfigFolderPath, contractsRegistryPath);
             return absolutePath;
-          }
+          },
         );
 
         return [...accumulator, ...absolutePathList];
       },
-      []
+      [],
     );
 
     return contractsRegistryPathList;
   }
 
   public static async loadContractsRegistry(
-    contractsRegistryPath: ContractsRegistryPath
+    contractsRegistryPath: ContractsRegistryPath,
   ): Promise<Result<ContractsRegistry<any>, string>> {
     let result: Result<ContractsRegistry<any>, string>;
 
@@ -55,21 +55,21 @@ export class ContractsRegistryLoader {
       const registry = module.default;
 
       if (
-        "contractsRecord" in registry &&
-        typeof registry.contractsRecord === "object" &&
-        "contractsRegistryPath" in registry &&
-        typeof registry.contractsRegistryPath === "string"
+        'contractsRecord' in registry &&
+        typeof registry.contractsRecord === 'object' &&
+        'contractsRegistryPath' in registry &&
+        typeof registry.contractsRegistryPath === 'string'
       ) {
         result = ok(registry);
       } else {
         result = err(
-          `Module at '${contractsRegistryPath}' does not have a default export that is an instance of ContractsRegistry.`
+          `Module at '${contractsRegistryPath}' does not have a default export that is an instance of ContractsRegistry.`,
         );
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       result = err(
-        `Failed to load registry from '${contractsRegistryPath}': ${message}`
+        `Failed to load registry from '${contractsRegistryPath}': ${message}`,
       );
     }
 
@@ -78,18 +78,18 @@ export class ContractsRegistryLoader {
 
   public static async loadContractsRegistryList(
     startFolderPath: string = cwd(),
-    rawboxConfigFileName: string = "rawbox.config.json"
+    rawboxConfigFileName: string = 'rawbox.config.json',
   ): Promise<Result<ContractsRegistry<any>, string>[]> {
     const contractsRegistryPathList =
       await ContractsRegistryLoader.loadContractsRegistryPathList(
         startFolderPath,
-        rawboxConfigFileName
+        rawboxConfigFileName,
       );
 
     const result = await Promise.all(
       contractsRegistryPathList.map((registryPath) =>
-        ContractsRegistryLoader.loadContractsRegistry(registryPath)
-      )
+        ContractsRegistryLoader.loadContractsRegistry(registryPath),
+      ),
     );
 
     return result;
@@ -97,12 +97,12 @@ export class ContractsRegistryLoader {
 
   public static async loadValidContractsRegistryList(
     startFolderPath: string = cwd(),
-    rawboxConfigFileName: string = "rawbox.config.json"
+    rawboxConfigFileName: string = 'rawbox.config.json',
   ): Promise<ContractsRegistry<any>[]> {
     const contractsRegistryList =
       await ContractsRegistryLoader.loadContractsRegistryList(
         startFolderPath,
-        rawboxConfigFileName
+        rawboxConfigFileName,
       );
 
     const filtered = Array.from(
@@ -110,8 +110,8 @@ export class ContractsRegistryLoader {
         contractsRegistryList
           .filter((result) => result.isOk())
           .map((result) => result.value)
-          .flat()
-      )
+          .flat(),
+      ),
     );
 
     return filtered;

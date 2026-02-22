@@ -1,7 +1,7 @@
-import { err, ok, type Result } from "neverthrow";
-import { randomUUID } from "crypto";
+import { err, ok, type Result } from 'neverthrow';
+import { randomUUID } from 'crypto';
 
-import type { Identifiable, IdentifiableError } from "./identifiable.js";
+import type { Identifiable, IdentifiableError } from './identifiable.js';
 
 export function createIdentifiable(alias: string, id: string): Identifiable {
   return {
@@ -18,11 +18,11 @@ export function createSimpleIdentifiable(id: string): Identifiable {
 }
 
 export function generateIdentifiable(
-  alias: string
+  alias: string,
 ): Result<Identifiable, IdentifiableError> {
   alias = alias.trim();
   if (!alias) {
-    return err("Alias cannot be empty");
+    return err('Alias cannot be empty');
   }
 
   const id = randomUUID();

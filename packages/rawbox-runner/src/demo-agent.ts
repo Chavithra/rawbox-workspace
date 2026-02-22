@@ -1,10 +1,10 @@
-import { LmdbBoxEnvCache, LmdbBoxStore } from "rawbox-store/lmdb-box-store";
-import { workflow, inputBoxList } from "./workflow-data.js";
-import { decodeBoxList } from "./workflow-utils.js";
+import { LmdbBoxEnvCache, LmdbBoxStore } from 'rawbox-store/lmdb-box-store';
+import { workflow, inputBoxList } from './workflow-data.js';
+import { decodeBoxList } from './workflow-utils.js';
 
 function buildLmdbBoxStore(): LmdbBoxStore<Uint8Array> {
   const folderPath =
-    "/home/dtp2/code/javascript/real/rawbox-workspace/packages/data";
+    '/home/dtp2/code/javascript/real/rawbox-workspace/packages/data';
   const boxEnvCache = new LmdbBoxEnvCache<Uint8Array>(folderPath);
   const boxStore = new LmdbBoxStore<Uint8Array>(boxEnvCache);
 

@@ -1,12 +1,12 @@
-import { access } from "node:fs/promises";
-import { constants } from "node:fs";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
+import { access } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
-import { glob } from "glob";
+import { glob } from 'glob';
 
 export function isAbsolute(inputPath: string) {
-  if (typeof inputPath !== "string" || inputPath.trim() === "") {
+  if (typeof inputPath !== 'string' || inputPath.trim() === '') {
     return false;
   }
 
@@ -29,7 +29,7 @@ export async function entryExists(path: string): Promise<boolean> {
 
 export async function findFileAtFolderRoot(
   folderPathList: string[],
-  targetFile: string = "rawbox.config.js"
+  targetFile: string = 'rawbox.config.js',
 ): Promise<string[]> {
   const lastPath = folderPathList.pop();
   const patternList = folderPathList.map((folderPath) => {
@@ -57,7 +57,7 @@ export function getAllSubPaths(fullPath: string): string[] {
 
 export async function findUpward(
   startFolder: string = path.dirname(fileURLToPath(import.meta.url)),
-  targetEntry: string = "node_modules"
+  targetEntry: string = 'node_modules',
 ) {
   const subFoldePathList = getAllSubPaths(startFolder);
   const candidatePathList = subFoldePathList.map((folderPath) => {
@@ -67,7 +67,7 @@ export async function findUpward(
   const existenceChecks = candidatePathList.map(entryExists);
   const existResultList = await Promise.all(existenceChecks);
   const existingPaths = candidatePathList.filter(
-    (_, index) => existResultList[index]
+    (_, index) => existResultList[index],
   );
 
   return existingPaths;
@@ -96,10 +96,10 @@ export function getCallerFilePath(): string {
     if (fileName) {
       result = fileName;
     } else {
-      throw Error("No fileName null.");
+      throw Error('No fileName null.');
     }
   } else {
-    throw Error("No caller found.");
+    throw Error('No caller found.');
   }
 
   return result;

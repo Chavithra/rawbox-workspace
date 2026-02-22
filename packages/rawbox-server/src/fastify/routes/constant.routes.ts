@@ -1,24 +1,24 @@
-import type { FastifyInstance, FastifyPluginOptions } from "fastify";
-import { and, eq } from "drizzle-orm";
-import { Type, Static } from "@sinclair/typebox";
+import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
+import { and, eq } from 'drizzle-orm';
+import { Type, Static } from '@sinclair/typebox';
 
-import { constantTable } from "../../drizzle/tables/constant.table.js";
+import { constantTable } from '../../drizzle/tables/constant.table.js';
 import {
   ConstantInsertSchema,
   ConstantSelectSchema,
-} from "../../typebox/schemas/constant.schema.js";
+} from '../../typebox/schemas/constant.schema.js';
 
 export default async function constantRoutes(
   fastify: FastifyInstance,
-  options: FastifyPluginOptions
+  options: FastifyPluginOptions,
 ) {
   // POST ONE
   fastify.post<{ Body: ConstantInsertSchema }>(
-    "/",
+    '/',
     {
       schema: {
-        description: "Create a constant",
-        tags: ["constant"],
+        description: 'Create a constant',
+        tags: ['constant'],
         body: ConstantInsertSchema,
         response: {
           201: ConstantSelectSchema,
@@ -32,7 +32,7 @@ export default async function constantRoutes(
         .values(newConstant)
         .returning();
       return reply.code(201).send(result[0]);
-    }
+    },
   );
 
   // GET ALL / BY FILTERS
@@ -43,12 +43,12 @@ export default async function constantRoutes(
   type GetAllQuerySchema = Static<typeof GetAllQuerySchema>;
 
   fastify.get<{ Querystring: GetAllQuerySchema }>(
-    "/",
+    '/',
     {
       schema: {
         description:
-          "Select all constants, optionally filtering by workspaceId and/or workflowId.",
-        tags: ["constant"],
+          'Select all constants, optionally filtering by workspaceId and/or workflowId.',
+        tags: ['constant'],
         querystring: GetAllQuerySchema,
         response: {
           200: Type.Array(ConstantSelectSchema),
@@ -72,7 +72,7 @@ export default async function constantRoutes(
       }
       const result = await query;
       return reply.send(result);
-    }
+    },
   );
 
   // GET ONE
@@ -84,11 +84,11 @@ export default async function constantRoutes(
   type GetOneParamsSchema = Static<typeof GetOneParamsSchema>;
 
   fastify.get<{ Params: GetOneParamsSchema }>(
-    "/:workspaceId/:workflowId/:keyId",
+    '/:workspaceId/:workflowId/:keyId',
     {
       schema: {
-        description: "Get a single constant by its composite key",
-        tags: ["constant"],
+        description: 'Get a single constant by its composite key',
+        tags: ['constant'],
         params: GetOneParamsSchema,
         response: {
           200: ConstantSelectSchema,
@@ -105,8 +105,8 @@ export default async function constantRoutes(
           and(
             eq(constantTable.workspaceId, workspaceId),
             eq(constantTable.workflowId, workflowId),
-            eq(constantTable.keyId, keyId)
-          )
+            eq(constantTable.keyId, keyId),
+          ),
         )
         .limit(1);
 
@@ -117,7 +117,7 @@ export default async function constantRoutes(
       }
 
       return reply.send(result[0]);
-    }
+    },
   );
 
   // DELETE ONE
@@ -129,11 +129,11 @@ export default async function constantRoutes(
   type DeleteOneParamsSchema = Static<typeof DeleteOneParamsSchema>;
 
   fastify.delete<{ Params: DeleteOneParamsSchema }>(
-    "/:workspaceId/:workflowId/:keyId",
+    '/:workspaceId/:workflowId/:keyId',
     {
       schema: {
-        description: "Delete a constant by its composite key",
-        tags: ["constant"],
+        description: 'Delete a constant by its composite key',
+        tags: ['constant'],
         params: DeleteOneParamsSchema,
         response: {
           200: Type.Object({ message: Type.String() }),
@@ -149,8 +149,8 @@ export default async function constantRoutes(
           and(
             eq(constantTable.workspaceId, workspaceId),
             eq(constantTable.workflowId, workflowId),
-            eq(constantTable.keyId, keyId)
-          )
+            eq(constantTable.keyId, keyId),
+          ),
         )
         .returning({ keyId: constantTable.keyId });
 
@@ -163,7 +163,7 @@ export default async function constantRoutes(
       return reply.send({
         message: `Constant with keyId ${keyId} in workspace ${workspaceId} and workflow ${workflowId} deleted successfully`,
       });
-    }
+    },
   );
 
   // PATCH ONE
@@ -175,16 +175,16 @@ export default async function constantRoutes(
   type PatchOneParamsSchema = Static<typeof PatchOneParamsSchema>;
 
   const PatchOneBodySchema = Type.Partial(
-    Type.Pick(ConstantInsertSchema, ["value"])
+    Type.Pick(ConstantInsertSchema, ['value']),
   );
   type PatchOneBodySchema = Static<typeof PatchOneBodySchema>;
 
   fastify.patch<{ Params: PatchOneParamsSchema; Body: PatchOneBodySchema }>(
-    "/:workspaceId/:workflowId/:keyId",
+    '/:workspaceId/:workflowId/:keyId',
     {
       schema: {
-        description: "Update a constant by its composite key (partial update)",
-        tags: ["constant"],
+        description: 'Update a constant by its composite key (partial update)',
+        tags: ['constant'],
         params: PatchOneParamsSchema,
         body: PatchOneBodySchema,
         response: {
@@ -201,7 +201,7 @@ export default async function constantRoutes(
       if (Object.keys(updateData).length === 0) {
         return reply
           .code(400)
-          .send({ message: "Request body must not be empty for an update." });
+          .send({ message: 'Request body must not be empty for an update.' });
       }
 
       const result = await fastify.db
@@ -211,8 +211,8 @@ export default async function constantRoutes(
           and(
             eq(constantTable.workspaceId, workspaceId),
             eq(constantTable.workflowId, workflowId),
-            eq(constantTable.keyId, keyId)
-          )
+            eq(constantTable.keyId, keyId),
+          ),
         )
         .returning();
 
@@ -223,6 +223,6 @@ export default async function constantRoutes(
       }
 
       return reply.send(result[0]);
-    }
+    },
   );
 }

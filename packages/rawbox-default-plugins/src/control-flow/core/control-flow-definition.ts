@@ -1,21 +1,21 @@
-import { err, ok } from "neverthrow";
-import { Type, type TObject } from "@sinclair/typebox";
-import { TypeCompiler } from "@sinclair/typebox/compiler";
+import { err, ok } from 'neverthrow';
+import { Type, type TObject } from '@sinclair/typebox';
+import { TypeCompiler } from '@sinclair/typebox/compiler';
 
-import { Contract } from "rawbox-plugin/contracts-registry";
-import { exportSetupContractsRegistry } from "rawbox-plugin/contracts-registry-utils";
+import { Contract } from 'rawbox-plugin/contracts-registry';
+import { exportSetupContractsRegistry } from 'rawbox-plugin/contracts-registry-utils';
 import {
   Definition,
   Handler,
   ValidatedHandler,
-} from "rawbox-plugin/definition";
+} from 'rawbox-plugin/definition';
 
 // DEFINE CONTROL_FLOW_CONTRACT
 export interface ControlFlowContract<
   TInputSchema extends TObject = TObject,
   TErrorSchema extends TObject = TObject,
 > extends Contract {
-  type: "control-flow";
+  type: 'control-flow';
   description: string;
   errorSchema: TErrorSchema;
   inputSchema: TInputSchema;
@@ -33,25 +33,25 @@ export const setupControlFlowContractsRegistry =
   exportSetupContractsRegistry<ControlFlowContract>();
 
 export function controlFlowContractGuard(
-  contract: object
+  contract: object,
 ): contract is ControlFlowContract<TObject, TObject> {
   return (
-    typeof contract === "object" &&
+    typeof contract === 'object' &&
     contract !== null &&
-    "type" in contract &&
-    contract.type === "control-flow" &&
-    "inputSchema" in contract &&
-    "errorSchema" in contract &&
-    "version" in contract
+    'type' in contract &&
+    contract.type === 'control-flow' &&
+    'inputSchema' in contract &&
+    'errorSchema' in contract &&
+    'version' in contract
   );
 }
 
 // DEFINE CONTROL_FLOW_DEFINITION
 export type DefaultRunItemLabel =
-  | "__CONTINUE__"
-  | "__TOP__"
-  | "__BOTTOM__"
-  | "__STOP__";
+  | '__CONTINUE__'
+  | '__TOP__'
+  | '__BOTTOM__'
+  | '__STOP__';
 
 export const OutputSchema = Type.Object({
   runItemLabel: Type.String(),
@@ -71,31 +71,30 @@ export interface HandlerValidatorSet<
   outputValidator: HandlerValidator<TOutput>;
 }
 
-export class ControlFlowDefinition<TContract extends ControlFlowContract>
-  implements
-    Definition<
-      TContract,
-      TContract["errorSchema"],
-      TContract["inputSchema"],
-      typeof OutputSchema
-    >
-{
+export class ControlFlowDefinition<
+  TContract extends ControlFlowContract,
+> implements Definition<
+  TContract,
+  TContract['errorSchema'],
+  TContract['inputSchema'],
+  typeof OutputSchema
+> {
   public readonly handlerValidatorSet: HandlerValidatorSet<
-    TContract["errorSchema"],
-    TContract["inputSchema"],
+    TContract['errorSchema'],
+    TContract['inputSchema'],
     typeof OutputSchema
   >;
   public readonly validatedHandler: ValidatedHandler<
-    TContract["errorSchema"],
-    TContract["inputSchema"],
+    TContract['errorSchema'],
+    TContract['inputSchema'],
     typeof OutputSchema
   >;
 
   public static buildHandlerValidatorSet<TContract extends ControlFlowContract>(
-    contract: TContract
+    contract: TContract,
   ): HandlerValidatorSet<
-    TContract["errorSchema"],
-    TContract["inputSchema"],
+    TContract['errorSchema'],
+    TContract['inputSchema'],
     typeof OutputSchema
   > {
     return {
@@ -111,7 +110,7 @@ export class ControlFlowDefinition<TContract extends ControlFlowContract>
     TOutput extends TObject,
   >(
     handler: Handler<TError, TInput, TOutput>,
-    validatorSet: HandlerValidatorSet<TError, TInput, TOutput>
+    validatorSet: HandlerValidatorSet<TError, TInput, TOutput>,
   ): ValidatedHandler<TError, TInput, TOutput> {
     return async (input) => {
       const { inputValidator, outputValidator, errorValidator } = validatorSet;
@@ -121,8 +120,8 @@ export class ControlFlowDefinition<TContract extends ControlFlowContract>
         const errors = Array.from(inputValidator.Errors(input));
         return err(
           new Error(
-            `Input validation failed: ${JSON.stringify(errors, null, 2)}`
-          )
+            `Input validation failed: ${JSON.stringify(errors, null, 2)}`,
+          ),
         );
       }
 
@@ -130,7 +129,7 @@ export class ControlFlowDefinition<TContract extends ControlFlowContract>
       try {
         output = await handler(input);
       } catch (error) {
-        return err(new Error("Handler execution failed: " + error));
+        return err(new Error('Handler execution failed: ' + error));
       }
 
       if (output.isErr()) {
@@ -140,8 +139,8 @@ export class ControlFlowDefinition<TContract extends ControlFlowContract>
           const errors = Array.from(errorValidator.Errors(errorValue));
           return err(
             new Error(
-              `Error validation failed: ${JSON.stringify(errors, null, 2)}`
-            )
+              `Error validation failed: ${JSON.stringify(errors, null, 2)}`,
+            ),
           );
         }
         return output;
@@ -153,8 +152,8 @@ export class ControlFlowDefinition<TContract extends ControlFlowContract>
         const errors = Array.from(outputValidator.Errors(outputs));
         return err(
           new Error(
-            `Output validation failed: ${JSON.stringify(errors, null, 2)}`
-          )
+            `Output validation failed: ${JSON.stringify(errors, null, 2)}`,
+          ),
         );
       }
 
@@ -165,16 +164,16 @@ export class ControlFlowDefinition<TContract extends ControlFlowContract>
   public constructor(
     public readonly contract: TContract,
     public readonly handler: Handler<
-      TContract["errorSchema"],
-      TContract["inputSchema"],
+      TContract['errorSchema'],
+      TContract['inputSchema'],
       typeof OutputSchema
-    >
+    >,
   ) {
     this.handlerValidatorSet =
       ControlFlowDefinition.buildHandlerValidatorSet(contract);
     this.validatedHandler = ControlFlowDefinition.buildValidatedHandler(
       this.handler,
-      this.handlerValidatorSet
+      this.handlerValidatorSet,
     );
   }
 }

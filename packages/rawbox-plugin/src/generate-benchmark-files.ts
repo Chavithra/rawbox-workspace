@@ -1,18 +1,18 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { faker } from "@faker-js/faker";
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { faker } from '@faker-js/faker';
 
 const NUM_FOLDERS = 1000;
 const NUM_FUNCTIONS_PER_FILE = 1000;
 const NUM_PARAMS_PER_FUNCTION = 10;
 
-const BASE_DIR = path.resolve(process.cwd(), "benchmark_files");
+const BASE_DIR = path.resolve(process.cwd(), 'benchmark_files');
 
 /**
  * Returns a random TypeBox type name.
  */
-function getRandomTypeName(): "String" | "Number" | "Boolean" {
-  const types = ["String", "Number", "Boolean"] as const;
+function getRandomTypeName(): 'String' | 'Number' | 'Boolean' {
+  const types = ['String', 'Number', 'Boolean'] as const;
   return types[Math.floor(Math.random() * types.length)];
 }
 
@@ -26,7 +26,7 @@ function generateContractEntryString(funcIndex: number): string {
   // Sanitize to ensure it's a valid variable name.
   const functionName = `${verb}${
     noun.charAt(0).toUpperCase() + noun.slice(1)
-  }`.replace(/[^a-zA-Z0-9]/g, "");
+  }`.replace(/[^a-zA-Z0-9]/g, '');
 
   const definitionPath = `./${functionName}_${funcIndex}.definition.js`;
 
@@ -36,11 +36,11 @@ function generateContractEntryString(funcIndex: number): string {
       const paramType = getRandomTypeName();
       const paramName = `${faker.lorem.word()}_${i}`.replace(
         /[^a-zA-Z0-9_]/g,
-        ""
+        '',
       );
       return `        ${paramName}: Type.${paramType}()`;
-    }
-  ).join(",\n");
+    },
+  ).join(',\n');
 
   const outputType = getRandomTypeName();
 
@@ -66,7 +66,7 @@ function generateContractEntryString(funcIndex: number): string {
 function generateContractsRegistryContent(): string {
   const contractEntries = Array.from(
     { length: NUM_FUNCTIONS_PER_FILE },
-    (_, i) => generateContractEntryString(i)
+    (_, i) => generateContractEntryString(i),
   );
 
   return `import { Type } from "@sinclair/typebox";
@@ -77,7 +77,7 @@ import {
 
 const contractsRegistry = setupOperationContractsRegistry({
   contractsRecord: {
-${contractEntries.join(",\n")}
+${contractEntries.join(',\n')}
   },
 });
 
@@ -102,21 +102,21 @@ async function main() {
     // Generate rawbox.config.json
     const configContent = JSON.stringify(
       {
-        contractsRegistryPathList: ["./contracts-registry.js"],
+        contractsRegistryPathList: ['./contracts-registry.js'],
       },
       null,
-      2
+      2,
     );
     await fs.writeFile(
-      path.join(folderPath, "rawbox.config.json"),
-      configContent
+      path.join(folderPath, 'rawbox.config.json'),
+      configContent,
     );
 
     // Generate contracts-registry.js
     const contractsContent = generateContractsRegistryContent();
     await fs.writeFile(
-      path.join(folderPath, "contracts-registry.js"),
-      contractsContent
+      path.join(folderPath, 'contracts-registry.js'),
+      contractsContent,
     );
 
     if ((i + 1) % 50 === 0 || i + 1 === NUM_FOLDERS) {
@@ -124,10 +124,10 @@ async function main() {
     }
   }
 
-  console.log("✅ Done generating benchmark files.");
+  console.log('✅ Done generating benchmark files.');
 }
 
 main().catch((err) => {
-  console.error("An error occurred during file generation:", err);
+  console.error('An error occurred during file generation:', err);
   process.exit(1);
 });

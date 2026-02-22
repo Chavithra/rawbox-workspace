@@ -1,13 +1,13 @@
-import { Type } from "@sinclair/typebox";
+import { Type } from '@sinclair/typebox';
 import {
   ControlFlowContract,
   controlFlowContractGuard,
   ControlFlowDefinition,
-} from "./control-flow-definition.js";
+} from './control-flow-definition.js';
 import {
   createLoadDefinition,
   createDefinitionCache,
-} from "rawbox-plugin/definition-cache";
+} from 'rawbox-plugin/definition-cache';
 
 const AnyObjectSchema = Type.Object({});
 

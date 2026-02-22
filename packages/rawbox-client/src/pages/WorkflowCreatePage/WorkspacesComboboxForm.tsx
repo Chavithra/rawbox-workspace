@@ -1,9 +1,9 @@
-import { Check, ChevronsUpDown } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Control } from "react-hook-form";
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Control } from 'react-hook-form';
 
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import {
   Command,
   CommandEmpty,
@@ -11,7 +11,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
+} from '@/components/ui/command';
 import {
   FormControl,
   FormDescription,
@@ -19,18 +19,18 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
+} from '@/components/ui/form';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
+} from '@/components/ui/popover';
 
 import {
   PostWorkflowsApiArg,
   GetWorkspacesApiResponse,
-} from "@/typebox/rawbox-api-schemas";
-import { useGetWorkspacesQuery } from "@/redux/rawbox-api";
+} from '@/typebox/rawbox-api-schemas';
+import { useGetWorkspacesQuery } from '@/redux/rawbox-api';
 
 interface WorkspacesComboboxProps {
   control: Control<PostWorkflowsApiArg>;
@@ -44,7 +44,7 @@ export function WorkspacesComboboxForm({ control }: WorkspacesComboboxProps) {
         label: workspaceItem.alias,
         value: workspaceItem.id,
       })) ?? [],
-    [workspaces]
+    [workspaces],
   );
 
   const [open, setOpen] = useState(false);
@@ -63,15 +63,15 @@ export function WorkspacesComboboxForm({ control }: WorkspacesComboboxProps) {
                   variant="outline"
                   role="combobox"
                   className={cn(
-                    "w-[200px] justify-between",
-                    !field.value && "text-muted-foreground"
+                    'w-[200px] justify-between',
+                    !field.value && 'text-muted-foreground',
                   )}
                 >
                   {field.value
                     ? workspaceOptions.find(
-                        (workspace) => workspace.value === field.value
+                        (workspace) => workspace.value === field.value,
                       )?.label
-                    : "Select workspace"}
+                    : 'Select workspace'}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </FormControl>
@@ -93,10 +93,10 @@ export function WorkspacesComboboxForm({ control }: WorkspacesComboboxProps) {
                       >
                         <Check
                           className={cn(
-                            "mr-2 h-4 w-4",
+                            'mr-2 h-4 w-4',
                             workspace.value === field.value
-                              ? "opacity-100"
-                              : "opacity-0"
+                              ? 'opacity-100'
+                              : 'opacity-0',
                           )}
                         />
                         {workspace.label}

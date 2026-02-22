@@ -1,4 +1,4 @@
-import { Type, type Static, type TSchema } from "@sinclair/typebox";
+import { Type, type Static, type TSchema } from '@sinclair/typebox';
 
 export const StepLabel = Type.Optional(Type.String());
 

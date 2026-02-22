@@ -1,3 +1,3 @@
-import ContractsRegistryListPage from "./ContractsRegistryListPage";
+import ContractsRegistryListPage from './ContractsRegistryListPage';
 
 export default ContractsRegistryListPage;

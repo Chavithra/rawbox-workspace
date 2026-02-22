@@ -1,30 +1,30 @@
-import path from "node:path";
+import path from 'node:path';
 
-import { err, ok, Result } from "neverthrow";
+import { err, ok, Result } from 'neverthrow';
 
 import {
   Definition,
   DefinitionLoader,
   DefinitionLocation,
   DefinitionPath,
-} from "./definition.js";
-import { Contract } from "./contracts-registry.js";
-import { isAbsolute } from "path";
-import { definitionGuard } from "./definition-utils.js";
-import { TObject } from "@sinclair/typebox";
+} from './definition.js';
+import { Contract } from './contracts-registry.js';
+import { isAbsolute } from 'path';
+import { definitionGuard } from './definition-utils.js';
+import { TObject } from '@sinclair/typebox';
 
 export function createLoadDefinition<
   TContract extends Contract,
   TDefinition extends Definition<TContract>,
 >(
-  contractGuard: (contract: object) => contract is TContract
+  contractGuard: (contract: object) => contract is TContract,
 ): DefinitionLoader<TContract, TDefinition> {
   async function loadDefinitionFromAbsolutePath(
-    definitionAbsolutePath: DefinitionPath
+    definitionAbsolutePath: DefinitionPath,
   ): Promise<Result<TDefinition, string>> {
     if (!isAbsolute(definitionAbsolutePath)) {
       return err(
-        `Parameter 'definitionAbsolutePath' should be absolute: '${definitionAbsolutePath}'`
+        `Parameter 'definitionAbsolutePath' should be absolute: '${definitionAbsolutePath}'`,
       );
     }
 
@@ -34,13 +34,13 @@ export function createLoadDefinition<
 
       if (!definitionGuard(definition)) {
         return err(
-          `Module default export from '${definitionAbsolutePath}' is not a valid Definition.`
+          `Module default export from '${definitionAbsolutePath}' is not a valid Definition.`,
         );
       }
 
       if (!contractGuard(definition.contract)) {
         return err(
-          `Contract in '${definitionAbsolutePath}' is not a valid contract for this loader.`
+          `Contract in '${definitionAbsolutePath}' is not a valid contract for this loader.`,
         );
       }
 
@@ -48,13 +48,13 @@ export function createLoadDefinition<
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return err(
-        `Failed to load definition from '${definitionAbsolutePath}': ${message}`
+        `Failed to load definition from '${definitionAbsolutePath}': ${message}`,
       );
     }
   }
 
   return async (
-    definitionLocation: DefinitionLocation
+    definitionLocation: DefinitionLocation,
   ): Promise<Result<TDefinition, string>> => {
     const { contractsRegistryPath, definitionPath } = definitionLocation;
 
@@ -75,19 +75,19 @@ export class DefinitionCache<
     private readonly definitionMap: Map<DefinitionPath, TDefinition> = new Map<
       DefinitionPath,
       TDefinition
-    >()
+    >(),
   ) {}
 
   public async getOrLoadDefinition(
     definitionLocation: DefinitionLocation,
-    forceReload: boolean = false
+    forceReload: boolean = false,
   ): Promise<Result<TDefinition, string>> {
     const { contractsRegistryPath, definitionPath } = definitionLocation;
     const cacheKey = `${contractsRegistryPath}:${definitionPath}`;
 
     const resultOfLoadDefinition = await this.loadDefinition(
       definitionLocation,
-      forceReload
+      forceReload,
     );
 
     if (resultOfLoadDefinition.isOk()) {
@@ -100,7 +100,7 @@ export class DefinitionCache<
 
   public async loadDefinition(
     definitionLocation: DefinitionLocation,
-    forceReload: boolean = false
+    forceReload: boolean = false,
   ): Promise<Result<void, string>> {
     let result: Result<void, string>;
 
@@ -128,13 +128,13 @@ export function createDefinitionCache<
   TContract extends Contract,
   TDefinition extends Definition<TContract>,
 >(
-  definitionLoader: DefinitionLoader<TContract, TDefinition>
+  definitionLoader: DefinitionLoader<TContract, TDefinition>,
 ): new (
-  definitionMap?: Map<DefinitionPath, TDefinition>
+  definitionMap?: Map<DefinitionPath, TDefinition>,
 ) => DefinitionCache<TContract, TDefinition> {
   return class extends DefinitionCache<TContract, TDefinition> {
     public constructor(
-      definitionMap: Map<DefinitionPath, TDefinition> = new Map()
+      definitionMap: Map<DefinitionPath, TDefinition> = new Map(),
     ) {
       super(definitionLoader, definitionMap);
     }

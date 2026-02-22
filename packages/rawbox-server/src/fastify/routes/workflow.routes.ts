@@ -1,24 +1,24 @@
-import type { FastifyInstance, FastifyPluginOptions } from "fastify";
-import { eq } from "drizzle-orm";
-import { Type, Static } from "@sinclair/typebox";
+import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
+import { eq } from 'drizzle-orm';
+import { Type, Static } from '@sinclair/typebox';
 
-import { workflowTable } from "../../drizzle/tables/workflow.table.js";
+import { workflowTable } from '../../drizzle/tables/workflow.table.js';
 import {
   WorkflowInsertSchema,
   WorkflowSelectSchema,
-} from "../../typebox/schemas/workflow.schemas.js";
+} from '../../typebox/schemas/workflow.schemas.js';
 
 export default async function workflowRoutes(
   fastify: FastifyInstance,
-  options: FastifyPluginOptions
+  options: FastifyPluginOptions,
 ) {
   // POST ONE
   fastify.post<{ Body: WorkflowInsertSchema }>(
-    "/",
+    '/',
     {
       schema: {
-        description: "Create a workflow",
-        tags: ["workflow"],
+        description: 'Create a workflow',
+        tags: ['workflow'],
         body: WorkflowInsertSchema,
         response: {
           201: WorkflowInsertSchema,
@@ -32,16 +32,16 @@ export default async function workflowRoutes(
         .values(newWorkflow)
         .returning();
       return reply.code(201).send(result[0]);
-    }
+    },
   );
 
   // GET ALL
   fastify.get(
-    "/",
+    '/',
     {
       schema: {
-        description: "Select all workflow",
-        tags: ["workflow"],
+        description: 'Select all workflow',
+        tags: ['workflow'],
         response: {
           200: Type.Array(WorkflowSelectSchema),
         },
@@ -50,7 +50,7 @@ export default async function workflowRoutes(
     async (request, reply) => {
       const result = await fastify.db.select().from(workflowTable);
       return reply.send(result);
-    }
+    },
   );
 
   // GET ONE
@@ -58,11 +58,11 @@ export default async function workflowRoutes(
   type GetOneParamsSchema = Static<typeof GetOneParamsSchema>;
 
   fastify.get<{ Params: GetOneParamsSchema }>(
-    "/:id",
+    '/:id',
     {
       schema: {
-        description: "Get a single workflow by ID",
-        tags: ["workflow"],
+        description: 'Get a single workflow by ID',
+        tags: ['workflow'],
         params: GetOneParamsSchema,
         response: {
           200: WorkflowSelectSchema,
@@ -85,7 +85,7 @@ export default async function workflowRoutes(
       }
 
       return reply.send(result[0]);
-    }
+    },
   );
 
   // DELETE ONE
@@ -93,11 +93,11 @@ export default async function workflowRoutes(
   type DeleteOneParamsSchema = Static<typeof DeleteOneParamsSchema>;
 
   fastify.delete<{ Params: DeleteOneParamsSchema }>(
-    "/:id",
+    '/:id',
     {
       schema: {
-        description: "Delete a workflow by ID",
-        tags: ["workflow"],
+        description: 'Delete a workflow by ID',
+        tags: ['workflow'],
         params: DeleteOneParamsSchema,
         response: {
           200: Type.Object({ message: Type.String() }),
@@ -121,7 +121,7 @@ export default async function workflowRoutes(
       return reply.send({
         message: `Workspace with id ${id} deleted successfully`,
       });
-    }
+    },
   );
 
   // PATCH ONE
@@ -132,11 +132,11 @@ export default async function workflowRoutes(
   type PatchOneBodySchema = Static<typeof PatchOneBodySchema>;
 
   fastify.patch<{ Params: PatchOneParamsSchema; Body: PatchOneBodySchema }>(
-    "/:id",
+    '/:id',
     {
       schema: {
-        description: "Update a workflow by ID (partial update)",
-        tags: ["workflow"],
+        description: 'Update a workflow by ID (partial update)',
+        tags: ['workflow'],
         params: PatchOneParamsSchema,
         body: PatchOneBodySchema,
         response: {
@@ -153,7 +153,7 @@ export default async function workflowRoutes(
       if (Object.keys(updateData).length === 0) {
         return reply
           .code(400)
-          .send({ message: "Request body must not be empty for an update." });
+          .send({ message: 'Request body must not be empty for an update.' });
       }
 
       const result = await fastify.db
@@ -169,6 +169,6 @@ export default async function workflowRoutes(
       }
 
       return reply.send(result[0]);
-    }
+    },
   );
 }

@@ -1,14 +1,14 @@
-import { Type } from "@sinclair/typebox";
+import { Type } from '@sinclair/typebox';
 import {
   setupOperationContractsRegistry,
   getOperationDefinitionCreator,
-} from "rawbox-plugin";
+} from 'rawbox-plugin';
 
 const contractsRegistry = setupOperationContractsRegistry({
   contractsRecord: {
-    "./sum.definition.js": {
-      type: "operation",
-      description: "Sum two numbers",
+    './sum.definition.js': {
+      type: 'operation',
+      description: 'Sum two numbers',
       inputSchema: Type.Object({
         a: Type.Number(),
         b: Type.Number(),
@@ -19,11 +19,11 @@ const contractsRegistry = setupOperationContractsRegistry({
       errorSchema: Type.Object({
         message: Type.String(),
       }),
-      version: "1.0.0",
+      version: '1.0.0',
     },
-    "./mul.definition.js": {
-      type: "operation",
-      description: "Multiply two numbers",
+    './mul.definition.js': {
+      type: 'operation',
+      description: 'Multiply two numbers',
       inputSchema: Type.Object({
         a: Type.Number(),
         b: Type.Number(),
@@ -35,7 +35,7 @@ const contractsRegistry = setupOperationContractsRegistry({
       errorSchema: Type.Object({
         message: Type.String(),
       }),
-      version: "1.0.0",
+      version: '1.0.0',
     },
   },
 });

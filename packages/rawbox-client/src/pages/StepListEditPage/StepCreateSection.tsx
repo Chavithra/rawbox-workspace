@@ -1,14 +1,14 @@
-import { useMemo } from "react";
+import { useMemo } from 'react';
 
-import { useGetContractsRegistryQuery } from "@/redux/rawbox-api";
+import { useGetContractsRegistryQuery } from '@/redux/rawbox-api';
 
 import {
   ContractsRecord,
   ContractsRecordsMap,
   StepCreateForm,
-} from "./StepCreateForm";
-import { SortableRowProps } from "./SortableRow";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+} from './StepCreateForm';
+import { SortableRowProps } from './SortableRow';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface StepCreateSectionProps {
   setSortableRowPropsList: React.Dispatch<

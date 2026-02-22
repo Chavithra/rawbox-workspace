@@ -1,3 +1,3 @@
-import WorkspaceEditPage from "./WorkspaceEditPage";
+import WorkspaceEditPage from './WorkspaceEditPage';
 
 export default WorkspaceEditPage;

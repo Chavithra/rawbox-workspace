@@ -1,6 +1,6 @@
-import { configureStore } from "@reduxjs/toolkit";
+import { configureStore } from '@reduxjs/toolkit';
 
-import { rawboxApi } from "./rawbox-api";
+import { rawboxApi } from './rawbox-api';
 
 export const store = configureStore({
   reducer: {

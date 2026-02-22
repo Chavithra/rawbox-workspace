@@ -1,22 +1,22 @@
-import { readFile } from "node:fs/promises";
-import { cwd } from "node:process";
-import path from "node:path";
+import { readFile } from 'node:fs/promises';
+import { cwd } from 'node:process';
+import path from 'node:path';
 
-import { err, ok, Result } from "neverthrow";
-import { findUpward, findFileAtFolderRoot } from "./entries-utils.js";
+import { err, ok, Result } from 'neverthrow';
+import { findUpward, findFileAtFolderRoot } from './entries-utils.js';
 
 import {
   RawboxConfig,
   RawboxConfigFile,
   RawboxConfigValidator,
-} from "./rawbox-config-file.js";
+} from './rawbox-config-file.js';
 
 export class RawboxConfigFinder {
   public static async findPackageRoot(
-    startFolderPath: string
+    startFolderPath: string,
   ): Promise<string | undefined> {
     let packageRootPath: string | undefined;
-    const pathList = await findUpward(startFolderPath, "package.json");
+    const pathList = await findUpward(startFolderPath, 'package.json');
 
     const lastPath = pathList.at(-1);
     if (lastPath) {
@@ -30,23 +30,22 @@ export class RawboxConfigFinder {
 
   public static async findRawboxConfigPathList(
     startFolderPath: string = cwd(),
-    configFileName: string = "rawbox.config.json"
+    configFileName: string = 'rawbox.config.json',
   ): Promise<string[]> {
     startFolderPath = path.resolve(startFolderPath);
     const nodeModulesPathList = await findUpward(
       startFolderPath,
-      "node_modules"
+      'node_modules',
     );
-    const currentPackageRootPath = await RawboxConfigFinder.findPackageRoot(
-      startFolderPath
-    );
+    const currentPackageRootPath =
+      await RawboxConfigFinder.findPackageRoot(startFolderPath);
     const pathListToSearch =
       currentPackageRootPath != undefined
         ? [...nodeModulesPathList, currentPackageRootPath]
         : nodeModulesPathList;
     const configFilePathList = await findFileAtFolderRoot(
       pathListToSearch,
-      configFileName
+      configFileName,
     );
 
     return configFilePathList;
@@ -55,11 +54,11 @@ export class RawboxConfigFinder {
 
 export class RawboxConfigLoader {
   public static async loadConfigFile(
-    rawboxConfigPath: string
+    rawboxConfigPath: string,
   ): Promise<Result<RawboxConfigFile, string>> {
     let result: Result<RawboxConfigFile, string>;
     try {
-      const fileContent = await readFile(rawboxConfigPath, "utf-8");
+      const fileContent = await readFile(rawboxConfigPath, 'utf-8');
       const rawboxConfig: RawboxConfig = JSON.parse(fileContent);
 
       const isValid = RawboxConfigValidator.Check(rawboxConfig);
@@ -76,7 +75,7 @@ export class RawboxConfigLoader {
     } catch (error) {
       const e = error instanceof Error ? error : new Error(String(error));
       result = err(
-        `Error loading config file ${rawboxConfigPath}: ${e.message}`
+        `Error loading config file ${rawboxConfigPath}: ${e.message}`,
       );
     }
 
@@ -85,20 +84,20 @@ export class RawboxConfigLoader {
 
   public static async loadRawboxConfigFileList(
     startFolderPath: string = cwd(),
-    configFileName: string = "rawbox.config.json"
+    configFileName: string = 'rawbox.config.json',
   ): Promise<Result<RawboxConfigFile, string>[]> {
     let result: Result<RawboxConfigFile, string>[] = [];
 
     startFolderPath = path.resolve(startFolderPath);
     const configPathList = await RawboxConfigFinder.findRawboxConfigPathList(
       startFolderPath,
-      configFileName
+      configFileName,
     );
 
     result = await Promise.all(
       configPathList.map(async (rawboxConfigPath) =>
-        RawboxConfigLoader.loadConfigFile(rawboxConfigPath)
-      )
+        RawboxConfigLoader.loadConfigFile(rawboxConfigPath),
+      ),
     );
 
     return result;
@@ -106,12 +105,12 @@ export class RawboxConfigLoader {
 
   public static async loadValidRawboxConfigFileList(
     startFolderPath: string = cwd(),
-    rawboxConfigFileName: string = "rawbox.config.json"
+    rawboxConfigFileName: string = 'rawbox.config.json',
   ): Promise<RawboxConfigFile[]> {
     const rawboxConfigFileList =
       await RawboxConfigLoader.loadRawboxConfigFileList(
         startFolderPath,
-        rawboxConfigFileName
+        rawboxConfigFileName,
       );
 
     const filtered = Array.from(
@@ -119,8 +118,8 @@ export class RawboxConfigLoader {
         rawboxConfigFileList
           .filter((result) => result.isOk())
           .map((result) => result.value)
-          .flat()
-      )
+          .flat(),
+      ),
     );
 
     return filtered;

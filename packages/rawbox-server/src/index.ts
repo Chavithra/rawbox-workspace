@@ -1,14 +1,14 @@
-import { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
-import cors from "@fastify/cors";
-import Fastify from "fastify";
+import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import cors from '@fastify/cors';
+import Fastify from 'fastify';
 
-import constantRoutes from "./fastify/routes/constant.routes.js";
-import contractsRegistryRoutes from "./fastify/routes/contracts-registry.routes.js";
-import dbPlugin from "./fastify/plugins/db.plugin.js";
-import envPlugin from "./fastify/plugins/env.plugin.js";
-import swaggerPlugin from "./fastify/plugins/swagger.plugin.js";
-import workflowRoutes from "./fastify/routes/workflow.routes.js";
-import workspaceRoutes from "./fastify/routes/workspace.routes.js";
+import constantRoutes from './fastify/routes/constant.routes.js';
+import contractsRegistryRoutes from './fastify/routes/contracts-registry.routes.js';
+import dbPlugin from './fastify/plugins/db.plugin.js';
+import envPlugin from './fastify/plugins/env.plugin.js';
+import swaggerPlugin from './fastify/plugins/swagger.plugin.js';
+import workflowRoutes from './fastify/routes/workflow.routes.js';
+import workspaceRoutes from './fastify/routes/workspace.routes.js';
 
 async function main() {
   const fastify = Fastify({
@@ -20,17 +20,17 @@ async function main() {
   await fastify.register(dbPlugin);
   await fastify.register(swaggerPlugin);
   await fastify.register(cors, {
-    origin: "http://localhost:5173",
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    origin: 'http://localhost:5173',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   });
 
   // Register routes
   await fastify.register(contractsRegistryRoutes, {
-    prefix: "/contracts-registry",
+    prefix: '/contracts-registry',
   });
-  await fastify.register(constantRoutes, { prefix: "/constants" });
-  await fastify.register(workflowRoutes, { prefix: "/workflows" });
-  await fastify.register(workspaceRoutes, { prefix: "/workspaces" });
+  await fastify.register(constantRoutes, { prefix: '/constants' });
+  await fastify.register(workflowRoutes, { prefix: '/workflows' });
+  await fastify.register(workspaceRoutes, { prefix: '/workspaces' });
 
   // Start the server
   try {

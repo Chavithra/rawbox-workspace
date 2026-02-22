@@ -1,3 +1,3 @@
-import WorkflowEditPage from "./WorkflowEditPage";
+import WorkflowEditPage from './WorkflowEditPage';
 
 export default WorkflowEditPage;

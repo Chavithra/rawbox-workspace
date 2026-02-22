@@ -1,17 +1,5 @@
 {
-  "name": "rawbox-client",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "npm run codegen && tsc -b && vite build",
-    "codegen-rtk": "npx @rtk-query/codegen-openapi openapi-config.ts",
-    "codegen-typebox": "npx typebox-cli codegen TypeBox --source src/redux/rawbox-api.ts > src/typebox/rawbox-api-schemas.ts",
-    "codegen": "npm run codegen-rtk && npm run codegen-typebox",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
+  "author": "Chavithra <chavithra@gmail.com>",
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^9.0.0",
@@ -42,6 +30,7 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^4.1.12"
   },
+  "description": "",
   "devDependencies": {
     "@eslint/js": "^9.25.0",
     "@rtk-query/codegen-openapi": "^2.0.0",
@@ -49,7 +38,6 @@
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
-    "esbuild-runner": "^2.2.2",
     "eslint": "^9.25.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
@@ -59,5 +47,20 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.30.1",
     "vite": "^6.3.5"
-  }
+  },
+  "keywords": [],
+  "license": "BSD-3-Clause",
+  "name": "rawbox-client",
+  "scripts": {
+    "build": "npm run codegen && tsc -b && vite build",
+    "codegen:all": "npm run codegen:rtk && npm run codegen:typebox",
+    "codegen:rtk": "npx @rtk-query/codegen-openapi openapi-config.ts",
+    "codegen:typebox": "npx typebox-cli codegen TypeBox --source src/redux/rawbox-api.ts > src/typebox/rawbox-api-schemas.ts",
+    "dev": "vite",
+    "lint": "eslint .",
+    "prettier:format": "prettier src --write",
+    "preview": "vite preview"
+  },
+  "type": "module",
+  "version": "0.0.0"
 }
