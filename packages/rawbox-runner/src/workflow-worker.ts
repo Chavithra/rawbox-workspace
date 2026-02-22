@@ -1,4 +1,4 @@
-import { MessagePort, parentPort, workerData } from "node:worker_threads";
+import { MessagePort, parentPort, workerData } from 'node:worker_threads';
 
 import {
   createActor,
@@ -10,25 +10,25 @@ import {
   CallbackActorLogic,
   NonReducibleUnknown,
   EventObject,
-} from "xstate";
-import { Box, BoxLocation } from "rawbox-store";
-import { OperationDefinitionCache } from "rawbox-plugin/operation-definition-cache";
+} from 'xstate';
+import { Box, BoxLocation } from 'rawbox-store';
+import { OperationDefinitionCache } from 'rawbox-plugin/operation-definition-cache';
 
-import { boxListToObject, decodeBoxList } from "./workflow-utils.js";
-import type { Workflow, Step } from "./workflow.js";
+import { boxListToObject, decodeBoxList } from './workflow-utils.js';
+import type { Workflow, Step } from './workflow.js';
 
 export type OrchestratorBridgeEvent =
   | {
-      type: "STORE_GET_MANY";
+      type: 'STORE_GET_MANY';
       boxLocationList: BoxLocation[];
       agentId: string;
     }
   | {
-      type: "STORE_PUT_MANY";
+      type: 'STORE_PUT_MANY';
       box: Box<Uint8Array>[];
     }
   | {
-      type: "ORCHESTRATOR_BRIDGE_READY";
+      type: 'ORCHESTRATOR_BRIDGE_READY';
     };
 
 export interface AgentState {
@@ -45,24 +45,24 @@ export interface WorkerData {
 
 type MachineEvent =
   | {
-      type: "ORCHESTRATOR_BRIDGE_READY";
+      type: 'ORCHESTRATOR_BRIDGE_READY';
     }
   | {
-      type: "RESTART";
+      type: 'RESTART';
     }
   | {
-      type: "STOP";
+      type: 'STOP';
     }
   | {
-      type: "STORE_GET_MANY_RESPONSE";
+      type: 'STORE_GET_MANY_RESPONSE';
       boxList: Box<Uint8Array>[];
     }
   | {
-      type: "STORE_PUT_MANY_RESPONSE";
+      type: 'STORE_PUT_MANY_RESPONSE';
       boxList: Box<Uint8Array>[];
     }
   | {
-      type: "OPERATION_OUTPUT_READY";
+      type: 'OPERATION_OUTPUT_READY';
       boxList: Box<Uint8Array>[];
     };
 
@@ -81,13 +81,13 @@ interface MachineContext {
 const agentWorkerMachineFactory = (
   workflow: Workflow,
   messagePort: MessagePort,
-  operationDefinitionCache: OperationDefinitionCache
+  operationDefinitionCache: OperationDefinitionCache,
 ) => {
   return setup({
     actors: {
       orchestratorBridgeActorLogic: fromCallback(({ sendBack, receive }) => {
         console.log(`WORKER:BRIDGE:`);
-        messagePort!.on("message", (msg) => {
+        messagePort!.on('message', (msg) => {
           sendBack(msg);
         });
 
@@ -95,10 +95,10 @@ const agentWorkerMachineFactory = (
           messagePort!.postMessage(event);
         });
 
-        sendBack({ type: "ORCHESTRATOR_BRIDGE_READY" });
+        sendBack({ type: 'ORCHESTRATOR_BRIDGE_READY' });
 
         return () => {
-          messagePort?.removeAllListeners("message");
+          messagePort?.removeAllListeners('message');
         };
       }),
       operationActorLogic: fromPromise(
@@ -108,25 +108,24 @@ const agentWorkerMachineFactory = (
 
           const resultOrgetOrLoadOperationImplementation =
             await operationDefinitionCache.getOrLoadDefinition(
-              definitionLocation
+              definitionLocation,
             );
           if (resultOrgetOrLoadOperationImplementation.isOk()) {
             const operation = resultOrgetOrLoadOperationImplementation.value;
 
-            const resultOfGetWrappedHandler = await operation.validatedHandler(
-              inputObject
-            );
+            const resultOfGetWrappedHandler =
+              await operation.validatedHandler(inputObject);
             if (resultOfGetWrappedHandler.isOk()) {
               console.log(resultOfGetWrappedHandler.value);
               return resultOfGetWrappedHandler.value;
             } else {
-              throw Error("Operation failed: " + JSON.stringify(input));
+              throw Error('Operation failed: ' + JSON.stringify(input));
             }
           } else {
             console.log(resultOrgetOrLoadOperationImplementation.error);
-            throw Error("Operation failed: " + JSON.stringify(input));
+            throw Error('Operation failed: ' + JSON.stringify(input));
           }
-        }
+        },
       ),
     },
     actions: {
@@ -157,7 +156,7 @@ const agentWorkerMachineFactory = (
         const agentId = workflow.id;
 
         orchestratorBridge!.send({
-          type: "STORE_GET_MANY",
+          type: 'STORE_GET_MANY',
           boxLocationList,
           agentId,
         });
@@ -176,18 +175,18 @@ const agentWorkerMachineFactory = (
       // },
       processOperationInput: assign({
         agentState: ({ context, event }) => {
-          console.log("PROCESSINPUT");
+          console.log('PROCESSINPUT');
           const { agentState } = context;
           const { step } = agentState;
           const { inputLocationRecord } = step!;
 
           let input;
-          if ("boxList" in event) {
+          if ('boxList' in event) {
             console.log(event);
             const boxItemList = decodeBoxList(event.boxList);
             input = boxListToObject(boxItemList, inputLocationRecord);
           } else {
-            throw Error("Invalid event");
+            throw Error('Invalid event');
           }
 
           return {
@@ -198,7 +197,7 @@ const agentWorkerMachineFactory = (
       }),
       processOperationOutput: assign({
         agentState: ({ context, event }) => {
-          if ("output" in event) {
+          if ('output' in event) {
             const newAgentState = {
               ...context.agentState,
               outputObject: event.output as Record<string, unknown>,
@@ -206,13 +205,13 @@ const agentWorkerMachineFactory = (
 
             return newAgentState;
           } else {
-            throw Error("Invalid event");
+            throw Error('Invalid event');
           }
         },
       }),
       processOperationError: ({ event }) => {
         console.log(event);
-        console.log("ERROR");
+        console.log('ERROR');
       },
       exitAgentWorker: () => {
         process.exit(0);
@@ -223,8 +222,8 @@ const agentWorkerMachineFactory = (
       context: {} as MachineContext,
     },
   }).createMachine({
-    id: "agentWorkerMachine",
-    initial: "settingOrchestratorBridge",
+    id: 'agentWorkerMachine',
+    initial: 'settingOrchestratorBridge',
     context: {
       workflow: workflow,
       agentState: {
@@ -240,36 +239,36 @@ const agentWorkerMachineFactory = (
       settingOrchestratorBridge: {
         entry: [
           assign(({ spawn }) => ({
-            orchestratorBridge: spawn("orchestratorBridgeActorLogic"),
+            orchestratorBridge: spawn('orchestratorBridgeActorLogic'),
           })),
         ],
         on: {
-          ORCHESTRATOR_BRIDGE_READY: "prepareOperation",
+          ORCHESTRATOR_BRIDGE_READY: 'prepareOperation',
         },
       },
       prepareOperation: {
-        entry: ["setupAgentState", "getOperationInput"],
+        entry: ['setupAgentState', 'getOperationInput'],
         on: {
           STORE_GET_MANY_RESPONSE: {
-            target: "runningOperation",
-            actions: "processOperationInput",
+            target: 'runningOperation',
+            actions: 'processOperationInput',
           },
         },
       },
       runningOperation: {
         invoke: {
-          src: "operationActorLogic",
+          src: 'operationActorLogic',
           input: ({ context }) => ({
             inputObject: context.agentState.inputObject!,
             step: context.agentState.step!,
           }),
           onDone: {
-            target: "stopping",
-            actions: "processOperationOutput",
+            target: 'stopping',
+            actions: 'processOperationOutput',
           },
           onError: {
-            target: "failure",
-            actions: "processOperationError",
+            target: 'failure',
+            actions: 'processOperationError',
           },
         },
       },
@@ -283,7 +282,7 @@ const agentWorkerMachineFactory = (
       //   },
       // },
       loadingNextRunInfo: {
-        type: "final",
+        type: 'final',
         // always: {
         //   target: "prepareOperation",
         //   actions: "loadNext",
@@ -291,12 +290,12 @@ const agentWorkerMachineFactory = (
         // entry: "exitWorker",
       },
       stopping: {
-        type: "final",
-        entry: "exitAgentWorker",
+        type: 'final',
+        entry: 'exitAgentWorker',
       },
       failure: {
-        type: "final",
-        entry: "exitAgentWorker",
+        type: 'final',
+        entry: 'exitAgentWorker',
       },
     },
   });
@@ -305,12 +304,12 @@ const agentWorkerMachineFactory = (
 function runAgentWorkerMachine(
   workflow: Workflow,
   messagePort: MessagePort,
-  operationDefinitionCache: OperationDefinitionCache
+  operationDefinitionCache: OperationDefinitionCache,
 ) {
   const agentWorkerMachine = agentWorkerMachineFactory(
     workflow,
     messagePort,
-    operationDefinitionCache
+    operationDefinitionCache,
   );
   const agentWorkerActor = createActor(agentWorkerMachine);
 
@@ -325,15 +324,15 @@ function runAgentWorkerMachine(
 function runAgentWorker(
   messagePort: MessagePort | null,
   operationDefinitionCache: OperationDefinitionCache,
-  workerData: WorkerData
+  workerData: WorkerData,
 ) {
   if (messagePort) {
-    if (workerData && "workflow" in workerData) {
+    if (workerData && 'workflow' in workerData) {
       const { workflow } = workerData;
 
       runAgentWorkerMachine(workflow, messagePort, operationDefinitionCache);
     } else {
-      throw new Error("Invalid Workdata");
+      throw new Error('Invalid Workdata');
     }
   } else {
     throw new Error("'parentPort' is null !.");

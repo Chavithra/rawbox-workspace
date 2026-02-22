@@ -1,8 +1,8 @@
-import { ContractsRegistryCache } from "rawbox-plugin/contracts-registry-cache";
-import { OperationDefinitionCache } from "rawbox-plugin/operation-definition-cache";
+import { ContractsRegistryCache } from 'rawbox-plugin/contracts-registry-cache';
+import { OperationDefinitionCache } from 'rawbox-plugin/operation-definition-cache';
 
 const signatureRegistryCache = await ContractsRegistryCache.build(
-  "/home/dtp2/code/javascript/real/rawbox-workspace/"
+  '/home/dtp2/code/javascript/real/rawbox-workspace/',
 );
 
 const definitionLocationList =

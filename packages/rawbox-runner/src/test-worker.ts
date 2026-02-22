@@ -1,4 +1,4 @@
-import { Worker } from "node:worker_threads";
+import { Worker } from 'node:worker_threads';
 
 import {
   setup,
@@ -9,44 +9,44 @@ import {
   CallbackActorLogic,
   NonReducibleUnknown,
   EventObject,
-} from "xstate";
-import { LmdbBoxEnvCache, LmdbBoxStore } from "rawbox-store/lmdb-box-store";
+} from 'xstate';
+import { LmdbBoxEnvCache, LmdbBoxStore } from 'rawbox-store/lmdb-box-store';
 
-import type { WorkerData } from "./workflow-worker.js";
-import { workflow } from "./workflow-data.js";
-import { Box, BoxLocation } from "rawbox-store";
-import { Workflow } from "./workflow.js";
+import type { WorkerData } from './workflow-worker.js';
+import { workflow } from './workflow-data.js';
+import { Box, BoxLocation } from 'rawbox-store';
+import { Workflow } from './workflow.js';
 
 type AgentWorkerBridgeEvent =
   | {
-      type: "STORE_GET_MANY_RESPONSE";
+      type: 'STORE_GET_MANY_RESPONSE';
       boxList: Box<Uint8Array>[];
       workflowId: string;
     }
   | {
-      type: "STORE_PUT_MANY_RESPONSE";
+      type: 'STORE_PUT_MANY_RESPONSE';
     };
 
 type MachineEvent =
   | {
-      type: "START_WORFKLOW";
+      type: 'START_WORFKLOW';
       workflow: Workflow;
     }
   | {
-      type: "STOP_WORFKLOW";
+      type: 'STOP_WORFKLOW';
       workflowIdentifier: string;
     }
   | {
-      type: "TERMINATE_WORKFLOW";
+      type: 'TERMINATE_WORKFLOW';
       workflowIdentifier: string;
     }
   | {
-      type: "STORE_GET_MANY";
+      type: 'STORE_GET_MANY';
       boxLocationList: BoxLocation[];
       workflowId: string;
     }
   | {
-      type: "STORE_PUT_MANY";
+      type: 'STORE_PUT_MANY';
       box: Box<Uint8Array>[];
       workflowId: string;
     };
@@ -66,7 +66,7 @@ interface MachineContext {
 
 function buildLmdbBoxStore(): LmdbBoxStore<Uint8Array> {
   const folderPath =
-    "/home/dtp2/code/javascript/real/rawbox-workspace/packages/data";
+    '/home/dtp2/code/javascript/real/rawbox-workspace/packages/data';
   const boxEnvCache = new LmdbBoxEnvCache<Uint8Array>(folderPath);
   const boxStore = new LmdbBoxStore<Uint8Array>(boxEnvCache);
 
@@ -75,7 +75,7 @@ function buildLmdbBoxStore(): LmdbBoxStore<Uint8Array> {
 
 function buildWorker(): Worker {
   const currentPath = import.meta.url;
-  const workerPath = new URL("./workflow-worker.js", currentPath);
+  const workerPath = new URL('./workflow-worker.js', currentPath);
   const workerData: WorkerData = { workflow };
   const worker = new Worker(workerPath, { workerData });
   return worker;
@@ -88,7 +88,7 @@ const machine = setup({
     workflowBridgeActorLogic: fromCallback(({ sendBack, receive }) => {
       const worker = buildWorker();
 
-      worker.on("message", (msg) => {
+      worker.on('message', (msg) => {
         sendBack(msg);
       });
 
@@ -103,7 +103,7 @@ const machine = setup({
   },
   actions: {
     storeGetManyActionFunction: async ({ context, event }) => {
-      if (event.type === "STORE_GET_MANY") {
+      if (event.type === 'STORE_GET_MANY') {
         const { boxLocationList, workflowId } = event;
         const resultOfGetMany = await lmdbBoxStore.getMany(boxLocationList);
         const boxList = resultOfGetMany
@@ -114,7 +114,7 @@ const machine = setup({
 
         if (workflowWorkerBridge) {
           workflowWorkerBridge.send({
-            type: "STORE_GET_MANY_RESPONSE",
+            type: 'STORE_GET_MANY_RESPONSE',
             boxList,
             workflowId,
           });
@@ -122,14 +122,14 @@ const machine = setup({
       }
     },
     storePutManyActionFunction: async ({ context, event }) => {
-      if (event.type === "STORE_PUT_MANY") {
+      if (event.type === 'STORE_PUT_MANY') {
         const { box, workflowId } = event;
         await lmdbBoxStore.setMany(box);
 
         const workflowWorkerBridge =
           context.workflowWorkerBridgeMap.get(workflowId);
         if (workflowWorkerBridge) {
-          workflowWorkerBridge.send({ type: "STORE_PUT_MANY_RESPONSE" });
+          workflowWorkerBridge.send({ type: 'STORE_PUT_MANY_RESPONSE' });
         }
       }
     },
@@ -139,8 +139,8 @@ const machine = setup({
     context: {} as MachineContext,
   },
 }).createMachine({
-  id: "workflowOrchestrator",
-  initial: "running",
+  id: 'workflowOrchestrator',
+  initial: 'running',
   context: { workflowWorkerBridgeMap: new Map() },
   states: {
     running: {
@@ -149,7 +149,7 @@ const machine = setup({
           actions: assign({
             workflowWorkerBridgeMap: ({ context, event, spawn }) => {
               const workflowId = event.workflow.id;
-              const workflowActor = spawn("workflowBridgeActorLogic", {
+              const workflowActor = spawn('workflowBridgeActorLogic', {
                 input: event.workflow,
               });
               const newMap = new Map(context.workflowWorkerBridgeMap);
@@ -159,10 +159,10 @@ const machine = setup({
           }),
         },
         STORE_GET_MANY: {
-          actions: "storeGetManyActionFunction",
+          actions: 'storeGetManyActionFunction',
         },
         STORE_PUT_MANY: {
-          actions: "storePutManyActionFunction",
+          actions: 'storePutManyActionFunction',
         },
       },
     },
@@ -176,7 +176,7 @@ actor.subscribe((snapshot) => {
 
 actor.start();
 
-actor.send({ type: "START_WORFKLOW", workflow });
+actor.send({ type: 'START_WORFKLOW', workflow });
 
 // worker.on("message", async (event) => {
 //   console.log("MAIN:", JSON.stringify(event, null, 2));
