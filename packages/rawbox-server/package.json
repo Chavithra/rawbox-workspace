@@ -6,7 +6,7 @@
     "@fastify/swagger": "^9.5.1",
     "@fastify/swagger-ui": "^5.2.3",
     "@fastify/type-provider-typebox": "^5.2.0",
-    "@sinclair/typebox": "^0.34.38",
+    "typebox": "^1.1.5",
     "better-sqlite3": "^12.2.0",
     "drizzle-orm": "^0.44.4",
     "drizzle-typebox": "^0.3.3",

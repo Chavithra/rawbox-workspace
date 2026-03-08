@@ -15,7 +15,7 @@
   "license": "BSD-3-Clause",
   "description": "",
   "devDependencies": {
-    "@types/node": "^20.11.20",
+    "@types/node": "^25.3.2",
     "@types/yargs": "^17.0.33",
     "copyfiles": "^2.4.1",
     "typescript": "^5.8.3"
