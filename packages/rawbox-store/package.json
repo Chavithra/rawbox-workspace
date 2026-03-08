@@ -1,35 +1,33 @@
 {
-  "name": "rawbox-store",
-  "version": "1.0.0",
-  "exports": {
-    ".": "./dist/index.js",
-    "./lmdb-box-store": "./dist/lmdb-box-store.js",
-    "./box-store-utils": "./dist/box-store-utils.js",
-    "./identifiable-utils": "./dist/identifiable-utils.js"
-  },
-  "scripts": {
-    "build": "tsc",
-    "start": "npm run build && node dist/index.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "test-lmdb": "npm run build && node dist/test-lmdb.js",
-    "test-port": "npm run build && node dist/test-port.js"
-  },
-  "keywords": [],
   "author": "",
-  "type": "module",
-  "license": "BSD-3-Clause",
+  "dependencies": {
+    "async-mutex": "^0.5.0",
+    "lmdb": "^3.5.1",
+    "neverthrow": "^8.2.0",
+    "rawbox-store": "file:",
+    "uuid": "^13.0.0",
+    "winston": "^3.19.0"
+  },
   "description": "",
   "devDependencies": {
     "@types/benchmark": "^2.1.5",
-    "@types/node": "^20.11.20",
+    "@types/node": "^25.3.2",
     "benchmark": "^2.1.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.3"
   },
-  "dependencies": {
-    "async-mutex": "^0.5.0",
-    "lmdb": "^3.4.0",
-    "neverthrow": "^8.2.0",
-    "uuid": "^11.1.0",
-    "winston": "^3.17.0"
-  }
+  "exports": {
+    ".": "./dist/index.js",
+    "./lmdb-box-store": "./dist/lmdb-box-store.js",
+    "./box-store-utils": "./dist/box-store-utils.js"
+  },
+  "license": "BSD-3-Clause",
+  "name": "rawbox-store",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/index.js",
+    "type-check": "tsc --noEmit",
+    "demo-cache": "npm run build && node dist/demo/demo-cache.js"
+  },
+  "type": "module",
+  "version": "1.0.0"
 }
