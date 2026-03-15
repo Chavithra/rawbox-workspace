@@ -40,7 +40,7 @@ export interface Box<TValue> {
 
 export interface BoxStore {
   get(boxEmpty: BoxEmpty): Promise<Result<any, string>>;
-  put(box: Box<any>): Promise<Result<boolean, string>>;
+  put(box: Box<any>): Promise<Result<void, string>>;
 }
 
 // export interface BoxStore<TValue> {
