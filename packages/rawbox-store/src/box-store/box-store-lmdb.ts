@@ -10,11 +10,16 @@ import { ok, err, Result } from 'neverthrow';
 
 import { type Box, type BoxEmpty } from '../box.js';
 import { type BoxStore } from './box-store.js';
+import { fileURLToPath } from 'node:url';
 
 export class LmdbDbiCache<TValue = any, TKey extends Key = number> {
   public constructor(
     public readonly env: RootDatabase,
-    public readonly dbiOptions: DatabaseOptions = {},
+    public readonly dbiOptions: DatabaseOptions = {
+      compression: true,
+      encoding: 'msgpack',
+      keyEncoding: 'uint32',
+    },
     private readonly dbiMap: Map<string, Database<TValue, TKey>> = new Map<
       string,
       Database<TValue, TKey>
@@ -54,7 +59,7 @@ export class LmdbDbiCache<TValue = any, TKey extends Key = number> {
 
 export class LmdbEnvCache<TValue, TKey extends Key> {
   public constructor(
-    public readonly rootDirectoryPath: string,
+    public readonly rootDirectoryUrl: URL,
     public readonly envOptions: RootDatabaseOptions = {},
     private readonly envMap: Map<string, RootDatabase<TValue, TKey>> = new Map<
       string,
@@ -65,7 +70,8 @@ export class LmdbEnvCache<TValue, TKey extends Key> {
   public getOrCreateEnv(
     envIdentifier: string,
   ): Result<RootDatabase<TValue, TKey>, string> {
-    const rootDirectoryPath = this.rootDirectoryPath;
+    const rootDirectoryUrl = this.rootDirectoryUrl;
+
     const dbiOptions = this.envOptions;
     const envMap = this.envMap;
 
@@ -75,9 +81,14 @@ export class LmdbEnvCache<TValue, TKey extends Key> {
     if (env) {
       result = ok(env);
     } else {
+      const folderUrl = rootDirectoryUrl.pathname.endsWith('/')
+        ? rootDirectoryUrl
+        : `${rootDirectoryUrl}/`;
+      const envFolderUrl = new URL(`./${envIdentifier}/`, folderUrl);
+      const envFolderPath = fileURLToPath(envFolderUrl);
       env = open<TValue, TKey>({
         ...dbiOptions,
-        path: `${rootDirectoryPath}/${envIdentifier}`,
+        path: envFolderPath,
       });
       if (env) {
         envMap.set(envIdentifier, env);
@@ -314,6 +325,18 @@ class BoxStoreLmdbFifo implements BoxStore {
 export class BoxStoreLmdb implements BoxStore {
   public readonly boxStoreLmdbFifo: BoxStoreLmdbFifo;
   public readonly boxStoreLmdbKv: BoxStoreLmdbKv;
+
+  public static create(workspace: string, rootDirectoryUrl: URL): BoxStoreLmdb {
+    const envCache = new LmdbEnvCache<any, number>(rootDirectoryUrl);
+
+    const env = envCache.getOrCreateEnv(workspace)._unsafeUnwrap();
+
+    const dbiCache = new LmdbDbiCache<any, number>(env);
+
+    const boxStore = new BoxStoreLmdb(dbiCache);
+
+    return boxStore;
+  }
 
   public constructor(public readonly dbiCache: LmdbDbiCache<any, number>) {
     this.boxStoreLmdbFifo = new BoxStoreLmdbFifo(dbiCache);

@@ -21,8 +21,8 @@ export const box1: Box<Ticker> = {
   },
 };
 
-const rootDirectoryPath = './data';
-const envCache = new LmdbEnvCache<object, number>(rootDirectoryPath);
+const rootDirectoryUrl = new URL('./data', import.meta.url);
+const envCache = new LmdbEnvCache<object, number>(rootDirectoryUrl);
 
 const env = envCache.getOrCreateEnv(workspace)._unsafeUnwrap();
 const dbiCacheOptions: DatabaseOptions = {
