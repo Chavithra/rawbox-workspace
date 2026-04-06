@@ -16,14 +16,17 @@ export const MachineInput = Type.Object({
   machineInstanceId: Type.String(),
   stepIndex: Type.Number(),
   stepList: Type.Array(Step),
+  workspace: Type.String(),
 });
 
 export type MachineInput = Static<typeof MachineInput>;
 
 export const MachineContext = Type.Object({
+  machineInstanceId: Type.String(),
   stepIndex: Type.Number(),
   stepList: Type.Array(Step),
   stepOutput: Type.Optional(StepOutput),
+  workspace: Type.String(),
 });
 
 export type MachineContext = Static<typeof MachineContext>;
@@ -60,6 +63,7 @@ const machine = setup({
     machineInstanceId: input.machineInstanceId,
     stepIndex: input.stepIndex,
     stepList: input.stepList,
+    workspace: input.workspace,
   }),
   states: {
     synchronizingWithDB: { on: { STOP: 'stopping' } },

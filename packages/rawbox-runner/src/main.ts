@@ -3,10 +3,10 @@ import { MachineInstanceManager } from './machine-instance-manager.js';
 const workerPath = new URL('./demo-worker.js', import.meta.url);
 const manager = new MachineInstanceManager(workerPath);
 
-// Encapsulated start: The manager handles ID generation and worker creation
 const machineInstanceId = manager.startMachine({
   stepIndex: 0,
   stepList: [],
+  workspace: 'counting',
 });
 
 const worker = manager.getInstance(machineInstanceId);
