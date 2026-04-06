@@ -1,22 +1,16 @@
 import {
-  OperationContract,
+  type OperationContract,
   operationContractGuard,
   OperationDefinition,
 } from './operation-definition.js';
 import {
   createLoadDefinition,
   createDefinitionCache,
-  DefinitionCache,
 } from './definition-cache.js';
-import { Contract, ContractsRegistry } from './contracts-registry.js';
+import { type ContractsRegistry } from './contracts-registry.js';
 import { Result } from 'neverthrow';
-import { Static, TObject, Type } from '@sinclair/typebox';
-import {
-  Definition,
-  DefinitionLocation,
-  DefinitionPath,
-  ValidationError,
-} from './definition.js';
+import { type Static, Type } from '@sinclair/typebox';
+import type { DefinitionLocation, ValidationError } from './definition.js';
 import { definitionGuard } from './definition-utils.js';
 
 const AnyObjectSchema = Type.Object({});

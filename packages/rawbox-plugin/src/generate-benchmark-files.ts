@@ -13,7 +13,7 @@ const BASE_DIR = path.resolve(process.cwd(), 'benchmark_files');
  */
 function getRandomTypeName(): 'String' | 'Number' | 'Boolean' {
   const types = ['String', 'Number', 'Boolean'] as const;
-  return types[Math.floor(Math.random() * types.length)];
+  return types[Math.floor(Math.random() * types.length)]!;
 }
 
 /**

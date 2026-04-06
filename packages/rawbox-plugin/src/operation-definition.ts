@@ -1,5 +1,5 @@
 import { err, ok } from 'neverthrow';
-import { TObject } from '@sinclair/typebox';
+import type { TObject } from '@sinclair/typebox';
 import { TypeCompiler } from '@sinclair/typebox/compiler';
 
 import type { Definition, Handler, ValidatedHandler } from './definition.js';

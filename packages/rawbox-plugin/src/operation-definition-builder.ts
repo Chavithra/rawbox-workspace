@@ -30,6 +30,11 @@ export class OperationDefinitionBuilder<
     const contractsRecord = this.contractsRecord;
 
     const contract = contractsRecord[definitionPath];
+    if (!contract) {
+      throw new Error(
+        `Contract for definition path "${definitionPath}" not found`,
+      );
+    }
     const operationDefinition = new OperationDefinition<
       OperationContract<
         TContractsRecord[K]['errorSchema'],

@@ -1,4 +1,4 @@
-import { Definition } from './definition.js';
+import { type Definition } from './definition.js';
 import type { Contract } from './contracts-registry.js';
 
 export function definitionGuard(

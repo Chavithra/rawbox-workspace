@@ -2,16 +2,15 @@ import path from 'node:path';
 
 import { err, ok, Result } from 'neverthrow';
 
-import {
+import type {
   Definition,
   DefinitionLoader,
   DefinitionLocation,
   DefinitionPath,
 } from './definition.js';
-import { Contract } from './contracts-registry.js';
+import { type Contract } from './contracts-registry.js';
 import { isAbsolute } from 'path';
 import { definitionGuard } from './definition-utils.js';
-import { TObject } from '@sinclair/typebox';
 
 export function createLoadDefinition<
   TContract extends Contract,

@@ -7,7 +7,7 @@ import { findUpward, findFileAtFolderRoot } from './entries-utils.js';
 
 import {
   RawboxConfig,
-  RawboxConfigFile,
+  type RawboxConfigFile,
   RawboxConfigValidator,
 } from './rawbox-config-file.js';
 
