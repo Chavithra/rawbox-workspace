@@ -4,7 +4,7 @@ import {
   BoxStoreLmdb,
 } from '../box-store/box-store-lmdb.js';
 import type { Database, DatabaseOptions } from 'lmdb';
-import type { Box, LmdbKV } from '../box-store/index.js';
+import type { Box, LmdbKV } from '../box.js';
 
 const workspace = 'martingale-bot';
 const workflow = 'price-fetcher';

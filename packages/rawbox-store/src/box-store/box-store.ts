@@ -1,42 +1,6 @@
 import type { Result } from 'neverthrow';
 
-export interface BoxStrategyBase {
-  name: string;
-}
-
-export interface LmdbKV extends BoxStrategyBase {
-  name: 'lmdb-kv';
-  valueSizeMax: number; // 2022 bytes should avoid overflow page
-}
-
-export interface LmdbFIFO extends BoxStrategyBase {
-  queueSizeMax: number;
-  name: 'lmdb-fifo';
-}
-
-export interface StrategyTypeRegistry {
-  'lmdb-fifo': LmdbFIFO;
-  'lmdb-kv': LmdbKV;
-}
-
-export type BoxStrategy = StrategyTypeRegistry[keyof StrategyTypeRegistry];
-
-export interface BoxLocation {
-  readonly workspace: string;
-  readonly workflow: string;
-  readonly key: number;
-}
-
-export interface BoxEmpty {
-  readonly location: BoxLocation;
-  readonly strategy: BoxStrategy;
-}
-
-export interface Box<TValue> {
-  readonly content: TValue;
-  readonly location: BoxLocation;
-  readonly strategy: BoxStrategy;
-}
+import { type Box, type BoxEmpty } from '../box.js';
 
 export interface BoxStore {
   get(boxEmpty: BoxEmpty): Promise<Result<any, string>>;

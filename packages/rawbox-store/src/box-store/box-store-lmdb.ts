@@ -8,7 +8,8 @@ import {
 } from 'lmdb';
 import { ok, err, Result } from 'neverthrow';
 
-import { type Box, type BoxEmpty, type BoxStore } from './index.js';
+import { type Box, type BoxEmpty } from '../box.js';
+import { type BoxStore } from './box-store.js';
 
 export class LmdbDbiCache<TValue = any, TKey extends Key = number> {
   public constructor(
