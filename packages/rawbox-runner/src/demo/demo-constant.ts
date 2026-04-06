@@ -20,8 +20,10 @@ export const inputBoxItemA: Box<number> = {
   },
 };
 
-await boxStore.put(inputBoxItemA);
+const env = boxStore.dbiCache.env;
 
-const value = await boxStore.get(inputBoxItemA);
-
-console.log(value);
+env.transaction(async () => {
+  await boxStore.put(inputBoxItemA);
+  const value = await boxStore.get(inputBoxItemA);
+  console.log(value);
+});
