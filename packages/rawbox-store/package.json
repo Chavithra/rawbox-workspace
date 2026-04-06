@@ -17,8 +17,7 @@
   },
   "exports": {
     ".": "./dist/index.js",
-    "./lmdb-box-store": "./dist/lmdb-box-store.js",
-    "./box-store-utils": "./dist/box-store-utils.js"
+    "./lmdb-box-store": "./dist/box-store/lmdb-box-store.js"
   },
   "license": "BSD-3-Clause",
   "name": "rawbox-store",
