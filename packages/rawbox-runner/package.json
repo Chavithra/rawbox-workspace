@@ -11,8 +11,7 @@
   "scripts": {
     "build": "tsc",
     "start": "npm run build && node dist/index.js",
-    "demo-main": "npm run build && node dist/demo-main.js",
-    "demo-worker": "npm run build && node dist/demo-worker.js"
+    "demo-constant": "npm run build && node dist/demo/demo-constant.js"
   },
   "keywords": [],
   "author": "",
