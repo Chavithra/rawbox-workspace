@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { typeboxResolver } from '@hookform/resolvers/typebox';
-import { TypeCompiler } from '@sinclair/typebox/compiler';
+import { TypeCompiler } from 'typebox/compile';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

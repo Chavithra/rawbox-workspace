@@ -7,7 +7,7 @@ import { RouterProvider } from 'react-router/dom';
 import './index.css';
 import { store } from './redux/store.ts';
 import App from './App.tsx';
-import ContractsRegistryListPage from './pages/ContractsRegistryListPage';
+import ContractRegistryListPage from './pages/ContractRegistryListPage';
 import HomePage from './pages/HomePage';
 import NotFoundPage from './pages/NotFoundPage';
 import StepListEditPage from './pages/StepListEditPage';
@@ -33,8 +33,8 @@ const router = createBrowserRouter([
         element: <NotFoundPage />,
       },
       {
-        path: '/ContractsRegistryListPage',
-        element: <ContractsRegistryListPage />,
+        path: '/ContractRegistryListPage',
+        element: <ContractRegistryListPage />,
       },
       {
         path: '/ConstantListEditPage/:id',

@@ -7,15 +7,15 @@
     "contracts-registry": {
       "name": "contracts-registry",
       "columns": {
-        "contractsRegistryPath": {
-          "name": "contractsRegistryPath",
+        "ContractRegistryPath": {
+          "name": "ContractRegistryPath",
           "type": "text",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
-        "contractsRecord": {
-          "name": "contractsRecord",
+        "ContractRecord": {
+          "name": "ContractRecord",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -66,12 +66,8 @@
           "name": "constant_workflow_id_workflow_id_fk",
           "tableFrom": "constant",
           "tableTo": "workflow",
-          "columnsFrom": [
-            "workflow_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workflow_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -79,23 +75,15 @@
           "name": "constant_workspace_id_workspace_id_fk",
           "tableFrom": "constant",
           "tableTo": "workspace",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "constant_workflow_id_workspace_id_key_id_pk": {
-          "columns": [
-            "workflow_id",
-            "workspace_id",
-            "key_id"
-          ],
+          "columns": ["workflow_id", "workspace_id", "key_id"],
           "name": "constant_workflow_id_workspace_id_key_id_pk"
         }
       },
@@ -140,12 +128,8 @@
           "name": "workflow_workspace_id_workspace_id_fk",
           "tableFrom": "workflow",
           "tableTo": "workspace",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }

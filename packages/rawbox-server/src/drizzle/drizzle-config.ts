@@ -1,5 +1,5 @@
 import {
-  contractsRegistryTable,
+  ContractRegistryTable,
   workflowRelations,
   workflowTable,
   workspaceRelations,
@@ -7,7 +7,7 @@ import {
 } from './tables/index.js';
 
 export const schema = {
-  contractsRegistryTable,
+  ContractRegistryTable,
   workflowRelations,
   workflowTable,
   workspaceRelations,

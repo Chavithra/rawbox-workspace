@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { eq } from 'drizzle-orm';
-import { Type, Static } from '@sinclair/typebox';
+import { Type, Static } from 'typebox';
 
 import { workflowTable } from '../../drizzle/tables/workflow.table.js';
 import {

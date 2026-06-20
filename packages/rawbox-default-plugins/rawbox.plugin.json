@@ -1,0 +1,6 @@
+{
+  "ContractRegistryPathList": [
+    "dist/control-flow/definitions/contract-registry.js",
+    "dist/maths/contract-registry.js"
+  ]
+}

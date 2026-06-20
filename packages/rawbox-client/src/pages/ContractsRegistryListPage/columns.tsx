@@ -1,21 +1,21 @@
 import { ColumnDef } from '@tanstack/react-table';
 
-import { type GetContractsRegistryApiResponse } from '@/typebox/rawbox-api-schemas';
+import { type GetContractRegistryApiResponse } from '@/typebox/rawbox-api-schemas';
 
-export const columns: ColumnDef<GetContractsRegistryApiResponse[number]>[] = [
+export const columns: ColumnDef<GetContractRegistryApiResponse[number]>[] = [
   {
-    accessorKey: 'contractsRegistryPath',
+    accessorKey: 'ContractRegistryPath',
     header: 'Contracts Registry Path',
   },
   {
-    accessorKey: 'contractsRecord',
+    accessorKey: 'ContractRecord',
     header: 'Contracts Registry Record',
     cell: ({ row }) => {
       const contracsRegistry = row.original;
 
       return (
         <>
-          <span>{JSON.stringify(contracsRegistry.contractsRecord)}</span>
+          <span>{JSON.stringify(contracsRegistry.ContractRecord)}</span>
         </>
       );
     },

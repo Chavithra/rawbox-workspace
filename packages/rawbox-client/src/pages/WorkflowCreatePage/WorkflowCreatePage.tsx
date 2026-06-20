@@ -1,5 +1,5 @@
 import { typeboxResolver } from '@hookform/resolvers/typebox';
-import { TypeCompiler } from '@sinclair/typebox/compiler';
+import { TypeCompiler } from 'typebox/compile';
 import { FieldErrors, useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';

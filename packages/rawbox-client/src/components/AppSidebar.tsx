@@ -19,7 +19,7 @@ const items = [
   },
   {
     title: 'Contracts',
-    url: '/ContractsRegistryListPage',
+    url: '/ContractRegistryListPage',
     icon: Book,
   },
   {

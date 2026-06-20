@@ -77,11 +77,11 @@ export function SortableRow(props: SortableRowProps) {
   const {
     definitionLocation,
     stepLabel,
-    errorLocationRecord,
-    inputLocationRecord,
-    outputLocationRecord,
+    errorBoxLocationRecord,
+    inputBoxLocationRecord,
+    outputBoxLocationRecord,
   } = step;
-  const { definitionPath, contractsRegistryPath } = definitionLocation;
+  const { definitionPath, ContractRegistryPath } = definitionLocation;
 
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
@@ -102,7 +102,7 @@ export function SortableRow(props: SortableRowProps) {
               Operation: {definitionPath}
             </CardDescription>
             <CardDescription className="font-mono text-xs mt-1 text-gray-500 break-all">
-              Registry Path: {contractsRegistryPath}
+              Registry Path: {ContractRegistryPath}
             </CardDescription>
           </div>
           <div
@@ -115,19 +115,19 @@ export function SortableRow(props: SortableRowProps) {
         <CardContent className="-mt-6">
           <LocationRecordDisplay
             title="Inputs"
-            record={inputLocationRecord}
+            record={inputBoxLocationRecord}
             icon={<ArrowRight className="h-4 w-4" />}
             colorClass="text-emerald-600"
           />
           <LocationRecordDisplay
             title="Outputs"
-            record={outputLocationRecord}
+            record={outputBoxLocationRecord}
             icon={<CheckCircle className="h-4 w-4" />}
             colorClass="text-yellow-600"
           />
           <LocationRecordDisplay
             title="Errors"
-            record={errorLocationRecord}
+            record={errorBoxLocationRecord}
             icon={<AlertTriangle className="h-4 w-4" />}
             colorClass="text-red-600"
           />

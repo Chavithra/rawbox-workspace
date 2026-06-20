@@ -1,9 +1,9 @@
 import { ok } from 'neverthrow';
-import { createOperationDefinition } from './contracts-registry.js';
+import { createOperationDefinition } from './contract-registry.js';
 
 const operationDefinition = createOperationDefinition(
   './mul.definition.js',
-  (input) => {
+  async (input) => {
     const { a, b, c } = input;
     return ok({ value: a * b * c });
   },

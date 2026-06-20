@@ -4,11 +4,11 @@ import { OperationContract } from 'rawbox-plugin/operation-definition';
 import { ControlFlowContract } from 'rawbox-default-plugins/control-flow-definition';
 
 type SupportedContract = OperationContract | ControlFlowContract;
-type SupportedContractsRecord = Record<string, SupportedContract>;
+type SupportedContractRecord = Record<string, SupportedContract>;
 
-export const contractsRegistryTable = sqliteTable('contracts-registry', {
-  contractsRegistryPath: text('contractsRegistryPath').primaryKey(),
-  contractsRecord: text('contractsRecord', { mode: 'json' })
+export const ContractRegistryTable = sqliteTable('contracts-registry', {
+  contractRegistryPath: text('ContractRegistryPath').primaryKey(),
+  contractRecord: text('ContractRecord', { mode: 'json' })
     .notNull()
-    .$type<SupportedContractsRecord>(),
+    .$type<SupportedContractRecord>(),
 });

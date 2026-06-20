@@ -4,24 +4,24 @@ import { Button } from '@/components/ui/button';
 import { columns } from './columns';
 import { DataTable } from '@/components/ui/data-table';
 import {
-  useGetContractsRegistryQuery,
-  usePostContractsRegistryReloadSyncMutation,
-  useDeleteContractsRegistryMutation,
+  useGetContractRegistryQuery,
+  usePostContractRegistryReloadSyncMutation,
+  useDeleteContractRegistryMutation,
 } from '@/redux/rawbox-api';
 
-export default function ContractsRegistryListPage() {
+export default function ContractRegistryListPage() {
   const {
-    data: contractsRegistryList,
+    data: ContractRegistryList,
     isLoading,
     isError,
     error,
-  } = useGetContractsRegistryQuery();
+  } = useGetContractRegistryQuery();
 
   const [contractsRegistriesReloadSync, { isLoading: isReloadLoading }] =
-    usePostContractsRegistryReloadSyncMutation();
+    usePostContractRegistryReloadSyncMutation();
 
   const [deleteAllContracts, { isLoading: isDeleteLoading }] =
-    useDeleteContractsRegistryMutation();
+    useDeleteContractRegistryMutation();
 
   function handleReload() {
     toast.promise(contractsRegistriesReloadSync().unwrap(), {
@@ -43,7 +43,7 @@ export default function ContractsRegistryListPage() {
     return <div>Loading...</div>;
   } else if (isError) {
     return <div>Error: {JSON.stringify(error)}</div>;
-  } else if (contractsRegistryList) {
+  } else if (ContractRegistryList) {
     return (
       <>
         <div className="text-indigo-600 ml-2 font-bold text-2xl">
@@ -68,7 +68,7 @@ export default function ContractsRegistryListPage() {
           </Button>
         </div>
         <div>
-          <DataTable columns={columns} data={contractsRegistryList} />
+          <DataTable columns={columns} data={ContractRegistryList} />
         </div>
       </>
     );

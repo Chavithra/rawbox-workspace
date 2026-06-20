@@ -1,167 +1,142 @@
-# rawbox-operation
+# rawbox-plugin
 
-`rawbox-operation` is a TypeScript library for defining, validating, and dynamically loading operation contracts and implementations in the Rawbox automation framework. It enables robust, type-safe automation by providing a registry system for operation contracts, runtime validation, and dynamic discovery of operations.
+## 1. Goal
 
----
+This library allows the creation of Definitions for components (operation or control-flow).
 
-## Features
+These Definitions contents all the necessary information in order to load and execute these components.
 
-- **Contracts Registry**: Centralized management of operation contracts (schemas, descriptions, versions).
-- **Type-Safe Implementations**: Enforce input/output types at compile time.
-- **Dynamic Loading**: Discover and load registries and implementations at runtime.
-- **Schema Validation**: Validate operation inputs/outputs with [@sinclair/typebox](https://github.com/sinclairzx81/typebox).
-- **Robust Error Handling**: Use [neverthrow](https://github.com/supermacro/neverthrow) for safe error management.
+A complete Definition consists of:
 
----
-
-## Installation
-
-```sh
-npm install rawbox-operation
-```
+1.1. **Contract**: The interface or schema (e.g., `inputSchema`, `outputSchema`, `errorSchema`) defined using `typebox`.
+1.2. **Handler**: The raw business-logic implementation of the component.
+1.3. **ValidatedHandler**: A type-validated implementation wrapper that enforces the `typebox` schemas at runtime before and after executing the handler.
 
 ---
 
-## Quick Start
+## 2. Workflow: Adding an Operation Type Component
 
-### 1. Write Operation Contracts
+### 2.1. Add an Operation Contract Registry
 
-First you write a contract for your Operation.
+Define all your specific operation contracts in a registry. This explicitly states the IO structures of your plugins.
 
-A contract define how one can interact with an Operation.
-
-```ts
-import { Type } from "@sinclair/typebox";
+```typescript
+// packages/rawbox-default-plugins/src/maths/contract-registry.ts
+import { Type } from 'typebox';
 import {
-  getOperationDefinitionCreator,
-  setupOperationContractsRegistry,
-} from "rawbox-operation";
+  setupOperationContractRegistry,
+  getOperationDefinitionBuilder,
+} from 'rawbox-plugin';
 
-const contractsRegistry = setupOperationContractsRegistry({
-  contractsRecord: {
-    "./sum.definition.js": {
-      type: "operation",
-      description: "Sum two numbers",
-      inputSchema: Type.Object({ a: Type.Number(), b: Type.Number() }),
-      outputSchema: Type.Object({ value: Type.Number() }),
-      errorSchema: Type.Object({ message: Type.String() }),
-      version: "1.0.0",
+const ContractRegistry = setupOperationContractRegistry({
+  contractRecord: {
+    './sum.definition.js': {
+      type: 'operation',
+      description: 'Sum two numbers',
+      inputSchema: Type.Object({
+        a: Type.Number(),
+        b: Type.Number(),
+      }),
+      outputSchema: Type.Object({
+        value: Type.Number(),
+      }),
+      errorSchema: Type.Object({
+        message: Type.String(),
+      }),
+      version: '1.0.0',
     },
   },
 });
 
+// Export a typed creator bound to your specific registry
 export const createOperationDefinition =
-  getOperationDefinitionCreator(contractsRegistry);
-
-export default contractsRegistry;
+  getOperationDefinitionBuilder(ContractRegistry);
+export default ContractRegistry;
 ```
 
-### 2. Write Operation Definition
+### 2.2. Add the Operation Definition (The Implementation)
 
-This is the code for your Operation.
+Write the actual logic/handler using the creator bound to your registry. Because of the registry's generic inference, your inputs and outputs are typed.
 
-TypeScript static analyzer will make sure you respect the Contract.
-
-```ts
-import { ok } from "neverthrow";
-import {
-  createOperationDefinition,
-  contractsRegistry,
-} from "./contracts-registry.js";
+```typescript
+// packages/rawbox-default-plugins/src/maths/sum.definition.ts
+import { ok } from 'neverthrow';
+import { createOperationDefinition } from './contract-registry.js';
 
 const operationDefinition = createOperationDefinition(
-  "./sum.definition.js",
-  (input) => ok({ value: input.a + input.b })
+  './sum.definition.js',
+  async (input) => {
+    // `input` is typed
+    const { a, b } = input;
+
+    // The return type is checked against outputSchema
+    return ok({ value: a + b });
+  },
 );
 
 export default operationDefinition;
 ```
 
-### 3. Manually invoke an Operation
+---
 
-You can dynamically load and invoke operation implementations using `OperationDynamicCaller`:
+## 3. Workflow: Adding a Control-Flow Type Component
 
-TypeScript static analyzer will make sure you respect the Contract.
+Adding a control-flow component follows the exact same pattern but uses the control-flow specific registry and builders.
 
-```ts
-import { OperationDynamicCaller } from "rawbox-operation";
-import contractsRegistry from "./contracts-registry.js";
+### 3.1. Add a Control-Flow Contract Registry
 
-const dynamicCaller = new OperationDynamicCaller(contractsRegistry);
+```typescript
+// packages/rawbox-default-plugins/src/control-flow/definitions/contract-registry.ts
+import { Type } from 'typebox';
+import {
+  getControlFlowDefinitionBuilder,
+  setupControlFlowContractRegistry,
+} from 'rawbox-plugin';
 
-const result = await dynamicCaller.callDefinition("./sum.definition.js", {
-  a: 2,
-  b: 3,
+const ContractRegistry = setupControlFlowContractRegistry({
+  contractRecord: {
+    './goto.definition.js': {
+      type: 'control-flow',
+      description: 'Jump to a specific step',
+      inputSchema: Type.Object({
+        condition: Type.Boolean(),
+        label: Type.String(),
+      }),
+      errorSchema: Type.Object({
+        message: Type.String(),
+      }),
+      version: '1.0.0',
+    },
+  },
 });
 
-if (result.isOk()) {
-  console.log("Sum result:", result.value); // { value: 5 }
-} else {
-  console.error("Operation failed:", result.error);
-}
+export const createControlFlowDefinition =
+  getControlFlowDefinitionBuilder(ContractRegistry);
+
+export default ContractRegistry;
 ```
 
-### 4. Configuration
+### 3.2. Add the Control-Flow Definition
 
-Declare your registry in a `rawbox.config.json` file:
+The control-flow handler always expects to return an object matching `{ label: string }`.
 
-```json
-{
-  "contractsRegistryPath": "./dist/contracts-registry.js"
-}
+```typescript
+// packages/rawbox-default-plugins/src/control-flow/definitions/jump.definition.ts
+import { ok } from 'neverthrow';
+import { createControlFlowDefinition } from './contract-registry.js';
+
+const controlFlowDefinition = createControlFlowDefinition(
+  './goto.definition.js',
+  async (input) => {
+    // `input` is typed
+    const { label } = input;
+
+    // Control-Flow handlers must return a label
+    return ok({ label });
+  },
+);
+
+export default controlFlowDefinition;
 ```
 
-### 5. Auto Discovery of Registries
-
-You can automatically discover all available operation contract registries in your workspace using `ContractsRegistryCache`. This is useful for building tools or plugins that need to work with all registered operations.
-
-```ts
-import { ContractsRegistryCache } from "rawbox-operation";
-
-// Build the cache (scans for rawbox.config.json files)
-const cache = await ContractsRegistryCache.build({
-  startFolder: "/optional/start/folder/path",
-});
-
-// Get all discovered registry paths
-const registryPaths = cache.getContractsRegistryPathList();
-
-console.log("Discovered registries:", registryPaths);
-
-// Optionally, load a specific registry
-const registry = await cache.getContractsRegistry(registryPaths[0]);
-```
-
-This mechanism scans for `rawbox.config.json` files and collects all declared `contractsRegistryPath` entries, enabling dynamic and scalable operation discovery.
-
----
-
-## API Reference
-
-- **setupOperationContractsRegistry**: Create a contracts registry for your operations.
-- **getOperationDefinitionCreator**: Generate type-safe operation implementations.
-- **ContractsRegistryCache**: In-memory cache for discovered registries.
-- **ContractsRegistryLoader**: Load registries from disk.
-- **OperationDefinitionLoader**: Load operation implementations.
-
----
-
-## Development
-
-Build the package:
-
-```sh
-npm run build
-```
-
-Run tests:
-
-```sh
-npm test
-```
-
----
-
-## License
-
-MIT
+With this architecture, the Runner can trust that any `Definition` it receives matches its schema, eliminating runtime data anomalies.
