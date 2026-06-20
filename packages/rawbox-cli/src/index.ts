@@ -4,7 +4,7 @@ import process from 'node:process';
 
 import FullEnvironment, { createEnv } from 'yeoman-environment';
 import chalk from 'chalk';
-import yargs, { Argv } from 'yargs';
+import yargs, { type Argv } from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
 import GeneratorCreate from './generator/generator-create/index.js';

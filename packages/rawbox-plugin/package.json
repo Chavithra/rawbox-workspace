@@ -1,51 +1,58 @@
 {
-  "name": "rawbox-plugin",
-  "version": "1.0.0",
-  "type": "module",
+  "author": "Chavithra Parana <chavithra@gmail.com>",
+  "dependencies": {
+    "glob": "^13.0.6",
+    "neverthrow": "^8.2.0",
+    "typebox": "^1.1.39",
+    "uuid": "^13.0.0"
+  },
+  "description": "",
+  "devDependencies": {
+    "@faker-js/faker": "^10.4.0",
+    "@types/benchmark": "^2.1.5",
+    "@types/node": "^25.8.0",
+    "benchmark": "^2.1.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./control-flow": {
+      "types": "./dist/control-flow/index.d.ts",
+      "default": "./dist/control-flow/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    },
+    "./operation": {
+      "types": "./dist/operation/index.d.ts",
+      "default": "./dist/operation/index.js"
+    }
+  },
   "files": [
     "dist"
   ],
-  "exports": {
-    ".": "./dist/src/index.js",
-    "./contracts-registry-cache": "./dist/src/contracts-registry-cache.js",
-    "./contracts-registry-loader": "./dist/src/contracts-registry-loader.js",
-    "./contracts-registry-utils": "./dist/src/contracts-registry-utils.js",
-    "./contracts-registry": "./dist/src/contracts-registry.js",
-    "./definition-cache": "./dist/src/definition-cache.js",
-    "./definition-utils": "./dist/src/definition-utils.js",
-    "./definition": "./dist/src/definition.js",
-    "./entries-utils": "./dist/src/entries-utils.js",
-    "./operation-definition-cache": "./dist/src/operation-definition-cache.js",
-    "./operation-definition": "./dist/src/operation-definition.js",
-    "./rawbox-config-loader": "./dist/src/rawbox-config-loader.js"
-  },
+  "keywords": [],
+  "license": "BSD-3-Clause",
+  "name": "rawbox-plugin",
   "scripts": {
     "build": "tsc",
-    "start": "npm run build && node dist/src/index.js",
-    "test": "npm run build && vitest",
-    "coverage": "npm run build && vitest run --coverage",
-    "test-benchmark": "npm run build && node --max-old-space-size=8192 dist/src/test-benchmark.js",
-    "test-load": "npm run build && node --max-old-space-size=8192 dist/src/test-load.js",
-    "generate-benchmark": "npm run build && node dist/src/generate-benchmark-files.js"
+    "demo-benchmark": "npm run build && node --max-old-space-size=8192 dist/demos/demo-benchmark.js",
+    "demo-definition": "npx tsx src/demos/demo-definition.js",
+    "demo-load": "npm run build && node --max-old-space-size=8192 dist/demos/demo-load.js",
+    "demo-registry": "npm run build && node dist/demos/demo-registry.js",
+    "generate-benchmark": "npm run build && node dist/generate-benchmark-files.js",
+    "lint": "eslint .",
+    "start": "npm run build && node dist/index.js",
+    "test": "vitest run tests",
+    "test:coverage": "vitest run tests --coverage",
+    "test:watch": "vitest tests",
+    "type-check": "tsc --noEmit"
   },
-  "keywords": [],
-  "author": "",
-  "license": "BSD-3-Clause",
-  "devDependencies": {
-    "@faker-js/faker": "^10.0.0",
-    "@types/benchmark": "^2.1.5",
-    "@types/node": "^25.3.2",
-    "@vitest/coverage-v8": "^3.2.4",
-    "benchmark": "^2.1.4",
-    "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
-  },
-  "dependencies": {
-    "typebox": "^1.1.5",
-    "glob": "^11.0.3",
-    "neverthrow": "^8.2.0",
-    "uuid": "^11.1.0",
-    "vite-tsconfig-paths": "^5.1.4"
-  },
-  "description": ""
+  "type": "module",
+  "version": "1.0.0"
 }

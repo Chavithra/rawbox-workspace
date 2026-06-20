@@ -1,24 +1,28 @@
 {
-  "author": "",
+  "author": "Chavithra Parana <chavithra@gmail.com>",
   "dependencies": {
     "async-mutex": "^0.5.0",
     "lmdb": "^3.5.1",
     "neverthrow": "^8.2.0",
-    "rawbox-store": "file:",
+    "typebox": "^1.1.39",
     "uuid": "^13.0.0",
     "winston": "^3.19.0"
   },
   "description": "",
   "devDependencies": {
-    "@types/benchmark": "^2.1.5",
-    "@types/node": "^25.3.2",
-    "benchmark": "^2.1.4",
-    "typescript": "^5.9.3"
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   },
   "exports": {
-    ".": "./dist/index.js",
-    "./lmdb-box-store": "./dist/lmdb-box-store.js",
-    "./box-store-utils": "./dist/box-store-utils.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./box-store-lmdb": {
+      "types": "./dist/box-store/box-store-lmdb.d.ts",
+      "default": "./dist/box-store/box-store-lmdb.js"
+    }
   },
   "license": "BSD-3-Clause",
   "name": "rawbox-store",
@@ -26,7 +30,8 @@
     "build": "tsc",
     "start": "npm run build && node dist/index.js",
     "type-check": "tsc --noEmit",
-    "demo-cache": "npm run build && node dist/demo/demo-cache.js"
+    "demo-cache": "npm run build && node dist/demo/demo-cache.js",
+    "test": "vitest run tests"
   },
   "type": "module",
   "version": "1.0.0"

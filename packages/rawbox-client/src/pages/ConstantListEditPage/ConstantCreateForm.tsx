@@ -1,8 +1,8 @@
 import { FieldErrors, useForm } from 'react-hook-form';
-import { Static, Type } from '@sinclair/typebox';
+import { Static, Type } from 'typebox';
 import { toast } from 'sonner';
 import { typeboxResolver } from '@hookform/resolvers/typebox';
-import { TypeCompiler } from '@sinclair/typebox/compiler';
+import { Compile } from 'typebox/compile';
 import { useNavigate } from 'react-router';
 
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,7 @@ const FormSchema = Type.Object({
 
 type FormSchema = Static<typeof FormSchema>;
 
-const formSchemaValidator = TypeCompiler.Compile(FormSchema);
+const formSchemaValidator = Compile(FormSchema);
 
 export function ConstantCreateForm({ workspaceId }: ConstantCreateFormProps) {
   const navigate = useNavigate();

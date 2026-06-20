@@ -2,7 +2,7 @@ import { useNavigate, useParams } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { useEffect } from 'react';
 import { typeboxResolver } from '@hookform/resolvers/typebox';
-import { TypeCompiler } from '@sinclair/typebox/compiler';
+import { TypeCompiler } from 'typebox/compile';
 
 import {
   useDeleteWorkflowsByIdMutation,

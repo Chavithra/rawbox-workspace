@@ -1,29 +1,29 @@
-import { Static } from '@sinclair/typebox';
+import { Static } from 'typebox';
 import {
   createInsertSchema,
   createSelectSchema,
   createUpdateSchema,
 } from 'drizzle-typebox';
 
-import { contractsRegistryTable } from '../../drizzle/tables/contracts-registry.table.js';
+import { ContractRegistryTable } from '../../drizzle/tables/contracts-registry.table.js';
 
-export const ContractsRegistrySelectSchema = createSelectSchema(
-  contractsRegistryTable,
+export const ContractRegistrySelectSchema = createSelectSchema(
+  ContractRegistryTable,
 );
-export type ContractsRegistrySelectSchema = Static<
-  typeof ContractsRegistrySelectSchema
+export type ContractRegistrySelectSchema = Static<
+  typeof ContractRegistrySelectSchema
 >;
 
-export const ContractsRegistryInsertSchema = createInsertSchema(
-  contractsRegistryTable,
+export const ContractRegistryInsertSchema = createInsertSchema(
+  ContractRegistryTable,
 );
-export type ContractsRegistryInsertSchema = Static<
-  typeof ContractsRegistryInsertSchema
+export type ContractRegistryInsertSchema = Static<
+  typeof ContractRegistryInsertSchema
 >;
 
-export const ContractsRegistryUpdateSchema = createUpdateSchema(
-  contractsRegistryTable,
+export const ContractRegistryUpdateSchema = createUpdateSchema(
+  ContractRegistryTable,
 );
-export type ContractsRegistryUpdateSchema = Static<
-  typeof ContractsRegistryUpdateSchema
+export type ContractRegistryUpdateSchema = Static<
+  typeof ContractRegistryUpdateSchema
 >;

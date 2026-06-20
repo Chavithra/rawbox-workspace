@@ -1,10 +1,10 @@
 {
-  "author": "Chavithra PARANA <chavithra@gmail.com>",
+  "author": "Chavithra Parana <chavithra@gmail.com>",
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
-    "@hookform/resolvers": "^5.2.1",
+    "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-popover": "^1.1.15",
@@ -13,7 +13,6 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@reduxjs/toolkit": "^2.8.2",
-    "@sinclair/typebox": "^0.34.40",
     "@tailwindcss/vite": "^4.1.12",
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
@@ -28,7 +27,8 @@
     "react-router": "^7.8.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
-    "tailwindcss": "^4.1.12"
+    "tailwindcss": "^4.1.12",
+    "typebox": "^1.1.38"
   },
   "description": "",
   "devDependencies": {

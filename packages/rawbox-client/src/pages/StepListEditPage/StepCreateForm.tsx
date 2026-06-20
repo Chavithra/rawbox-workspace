@@ -1,14 +1,13 @@
 import { toast } from 'sonner';
-import { Type, type Static } from '@sinclair/typebox';
+import { Type, type Static } from 'typebox';
 import { typeboxResolver } from '@hookform/resolvers/typebox';
-import { TypeCompiler } from '@sinclair/typebox/compiler';
+import { TypeCompiler } from 'typebox/compile';
 import { useEffect, useMemo } from 'react';
 import { useForm, type FieldErrors } from 'react-hook-form';
 
 import { type BoxLocationRecord, type Step } from 'rawbox-runner';
 import { ControlFlowContract } from 'rawbox-default-plugins/control-flow-definition';
 import { OperationContract } from 'rawbox-plugin/operation-definition';
-import { createSimpleBoxLocation } from 'rawbox-store/box-store-utils';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -29,15 +28,15 @@ import {
 } from '@/components/ui/select';
 import { SortableRowProps } from './SortableRow';
 
-export interface ContractsRecord {
-  contractsRegistryPath: string;
-  contractsRecord: Record<string, OperationContract | ControlFlowContract>;
+export interface ContractRecord {
+  contractRegistryPath: string;
+  contractRecord: Record<string, OperationContract | ControlFlowContract>;
 }
 
-export type ContractsRecordsMap = Record<string, ContractsRecord>;
+export type ContractRecordsMap = Record<string, ContractRecord>;
 
 export const BaseDefinitionLocation = Type.Object({
-  contractsRegistryPath: Type.String({ minLength: 1 }),
+  contractRegistryPath: Type.String({ minLength: 1 }),
   definitionPath: Type.String({ minLength: 1 }),
 });
 
@@ -46,15 +45,15 @@ type LocationRecord = Static<typeof LocationRecord>;
 
 export const BaseFormSchema = Type.Object({
   definitionLocation: BaseDefinitionLocation,
-  errorLocationRecord: LocationRecord,
-  inputLocationRecord: LocationRecord,
-  outputLocationRecord: LocationRecord,
+  errorBoxLocationRecord: LocationRecord,
+  inputBoxLocationRecord: LocationRecord,
+  outputBoxLocationRecord: LocationRecord,
   stepLabel: Type.Optional(Type.String()),
 });
 export type BaseFormSchema = Static<typeof BaseFormSchema>;
 
 interface StepCreateFormProps {
-  contractsRecordMap: ContractsRecordsMap;
+  ContractRecordMap: ContractRecordsMap;
   setSortableRowPropsList: React.Dispatch<
     React.SetStateAction<SortableRowProps[]>
   >;
@@ -66,11 +65,12 @@ function convertToBoxLocationRecord(
   return Object.entries(locationRecord).reduce(
     (acc, [parameterName, BoxLocationKeyId]) => {
       if (BoxLocationKeyId) {
-        acc[parameterName] = createSimpleBoxLocation(
-          'env1',
-          'dbi1',
-          BoxLocationKeyId,
-        );
+        acc[parameterName] = {
+          key: Number(BoxLocationKeyId),
+          workflow: 'dbi1',
+          workspace: 'env1',
+          strategy: { name: 'lmdb-kv', valueSizeMax: 1024 },
+        };
       }
       return acc;
     },
@@ -79,7 +79,7 @@ function convertToBoxLocationRecord(
 }
 
 export function StepCreateForm({
-  contractsRecordMap,
+  ContractRecordMap,
   setSortableRowPropsList,
 }: StepCreateFormProps) {
   const formSchemaValidator = TypeCompiler.Compile(BaseFormSchema);
@@ -87,38 +87,38 @@ export function StepCreateForm({
     resolver: typeboxResolver(formSchemaValidator),
     defaultValues: {
       definitionLocation: {
-        contractsRegistryPath: '',
+        contractRegistryPath: '',
         definitionPath: '',
       },
-      inputLocationRecord: {},
-      outputLocationRecord: {},
-      errorLocationRecord: {},
+      inputBoxLocationRecord: {},
+      outputBoxLocationRecord: {},
+      errorBoxLocationRecord: {},
       stepLabel: undefined,
     },
   });
 
   const { resetField } = form;
-  const contractsRegistryPathValue = form.watch(
-    'definitionLocation.contractsRegistryPath',
+  const ContractRegistryPathValue = form.watch(
+    'definitionLocation.ContractRegistryPath',
   );
   const definitionPathValue = form.watch('definitionLocation.definitionPath');
 
   const definitionPathOptions = useMemo(() => {
-    const contractsRecord =
-      contractsRecordMap[contractsRegistryPathValue]?.contractsRecord;
+    const ContractRecord =
+      ContractRecordMap[ContractRegistryPathValue]?.ContractRecord;
 
-    if (contractsRecord && typeof contractsRecord === 'object') {
-      return Object.keys(contractsRecord);
+    if (ContractRecord && typeof ContractRecord === 'object') {
+      return Object.keys(ContractRecord);
     }
 
     return [];
-  }, [contractsRegistryPathValue, contractsRecordMap]);
+  }, [ContractRegistryPathValue, ContractRecordMap]);
 
   const inputLocationNameList = useMemo(() => {
     let result: string[];
 
     const contract =
-      contractsRecordMap[contractsRegistryPathValue]?.contractsRecord[
+      ContractRecordMap[ContractRegistryPathValue]?.ContractRecord[
         definitionPathValue
       ];
 
@@ -130,13 +130,13 @@ export function StepCreateForm({
     }
 
     return result;
-  }, [contractsRegistryPathValue, contractsRecordMap, definitionPathValue]);
+  }, [ContractRegistryPathValue, ContractRecordMap, definitionPathValue]);
 
   const outputLocationNameList = useMemo(() => {
     let result: string[];
 
     const contract =
-      contractsRecordMap[contractsRegistryPathValue]?.contractsRecord[
+      ContractRecordMap[ContractRegistryPathValue]?.ContractRecord[
         definitionPathValue
       ];
 
@@ -148,13 +148,13 @@ export function StepCreateForm({
     }
 
     return result;
-  }, [contractsRecordMap, contractsRegistryPathValue, definitionPathValue]);
+  }, [ContractRecordMap, ContractRegistryPathValue, definitionPathValue]);
 
   const errorLocationNameList = useMemo(() => {
     let result: string[];
 
     const contract =
-      contractsRecordMap[contractsRegistryPathValue]?.contractsRecord[
+      ContractRecordMap[ContractRegistryPathValue]?.ContractRecord[
         definitionPathValue
       ];
 
@@ -166,15 +166,15 @@ export function StepCreateForm({
     }
 
     return result;
-  }, [contractsRecordMap, contractsRegistryPathValue, definitionPathValue]);
+  }, [ContractRecordMap, ContractRegistryPathValue, definitionPathValue]);
 
   useEffect(() => {
     resetField('definitionLocation.definitionPath', { defaultValue: '' });
-    resetField('inputLocationRecord', { defaultValue: {} });
-    resetField('outputLocationRecord', { defaultValue: {} });
-    resetField('errorLocationRecord', { defaultValue: {} });
+    resetField('inputBoxLocationRecord', { defaultValue: {} });
+    resetField('outputBoxLocationRecord', { defaultValue: {} });
+    resetField('errorBoxLocationRecord', { defaultValue: {} });
     resetField('stepLabel', { defaultValue: undefined });
-  }, [contractsRegistryPathValue, resetField]);
+  }, [ContractRegistryPathValue, resetField]);
 
   const onInvalid = (e: FieldErrors<BaseFormSchema>) => {
     console.log(e);
@@ -188,17 +188,23 @@ export function StepCreateForm({
   const onSubmit = async (inputs: BaseFormSchema) => {
     const {
       definitionLocation,
-      inputLocationRecord,
-      outputLocationRecord,
-      errorLocationRecord,
+      inputBoxLocationRecord,
+      outputBoxLocationRecord,
+      errorBoxLocationRecord,
       stepLabel,
     } = inputs;
 
     const step: Step = {
       definitionLocation,
-      inputLocationRecord: convertToBoxLocationRecord(inputLocationRecord),
-      outputLocationRecord: convertToBoxLocationRecord(outputLocationRecord),
-      errorLocationRecord: convertToBoxLocationRecord(errorLocationRecord),
+      inputBoxLocationRecord: convertToBoxLocationRecord(
+        inputBoxLocationRecord,
+      ),
+      outputBoxLocationRecord: convertToBoxLocationRecord(
+        outputBoxLocationRecord,
+      ),
+      errorBoxLocationRecord: convertToBoxLocationRecord(
+        errorBoxLocationRecord,
+      ),
       stepLabel,
     };
 
@@ -226,7 +232,7 @@ export function StepCreateForm({
         >
           <FormField
             control={form.control}
-            name="definitionLocation.contractsRegistryPath"
+            name="definitionLocation.ContractRegistryPath"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Contracts Registry Path</FormLabel>
@@ -236,13 +242,13 @@ export function StepCreateForm({
                       <SelectValue placeholder="Contracts Registry Path" />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.keys(contractsRecordMap).map(
-                        (contractsRegistryPath) => (
+                      {Object.keys(ContractRecordMap).map(
+                        (ContractRegistryPath) => (
                           <SelectItem
-                            key={contractsRegistryPath}
-                            value={contractsRegistryPath}
+                            key={ContractRegistryPath}
+                            value={ContractRegistryPath}
                           >
-                            {contractsRegistryPath}
+                            {ContractRegistryPath}
                           </SelectItem>
                         ),
                       )}
@@ -263,7 +269,7 @@ export function StepCreateForm({
                   <Select
                     onValueChange={field.onChange}
                     value={field.value}
-                    disabled={!contractsRegistryPathValue}
+                    disabled={!ContractRegistryPathValue}
                     required
                   >
                     <SelectTrigger className="w-sm">
@@ -287,7 +293,7 @@ export function StepCreateForm({
             <FormField
               key={inputLocationName}
               control={form.control}
-              name={`inputLocationRecord.${inputLocationName}`}
+              name={`inputBoxLocationRecord.${inputLocationName}`}
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-emerald-600">
@@ -310,7 +316,7 @@ export function StepCreateForm({
             <FormField
               key={outputLocationName}
               control={form.control}
-              name={`outputLocationRecord.${outputLocationName}`}
+              name={`outputBoxLocationRecord.${outputLocationName}`}
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-yellow-600">
@@ -333,7 +339,7 @@ export function StepCreateForm({
             <FormField
               key={errorLocationName}
               control={form.control}
-              name={`errorLocationRecord.${errorLocationName}`}
+              name={`errorBoxLocationRecord.${errorLocationName}`}
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-red-600">

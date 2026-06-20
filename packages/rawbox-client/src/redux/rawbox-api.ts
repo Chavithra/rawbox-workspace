@@ -11,23 +11,23 @@ const injectedRtkApi = api
   })
   .injectEndpoints({
     endpoints: (build) => ({
-      getContractsRegistry: build.query<
-        GetContractsRegistryApiResponse,
-        GetContractsRegistryApiArg
+      getcontractRegistry: build.query<
+        GetContractRegistryApiResponse,
+        GetContractRegistryApiArg
       >({
         query: () => ({ url: `/contracts-registry/` }),
         providesTags: ['contracts-registry'],
       }),
-      deleteContractsRegistry: build.mutation<
-        DeleteContractsRegistryApiResponse,
-        DeleteContractsRegistryApiArg
+      deletecontractRegistry: build.mutation<
+        DeleteContractRegistryApiResponse,
+        DeleteContractRegistryApiArg
       >({
         query: () => ({ url: `/contracts-registry/`, method: 'DELETE' }),
         invalidatesTags: ['contracts-registry'],
       }),
-      postContractsRegistryReloadSync: build.mutation<
-        PostContractsRegistryReloadSyncApiResponse,
-        PostContractsRegistryReloadSyncApiArg
+      postContractRegistryReloadSync: build.mutation<
+        PostContractRegistryReloadSyncApiResponse,
+        PostContractRegistryReloadSyncApiArg
       >({
         query: () => ({
           url: `/contracts-registry/reload-sync`,
@@ -35,9 +35,9 @@ const injectedRtkApi = api
         }),
         invalidatesTags: ['contracts-registry'],
       }),
-      postContractsRegistryReloadAsync: build.mutation<
-        PostContractsRegistryReloadAsyncApiResponse,
-        PostContractsRegistryReloadAsyncApiArg
+      postContractRegistryReloadAsync: build.mutation<
+        PostContractRegistryReloadAsyncApiResponse,
+        PostContractRegistryReloadAsyncApiArg
       >({
         query: () => ({
           url: `/contracts-registry/reload-async`,
@@ -188,32 +188,32 @@ const injectedRtkApi = api
     overrideExisting: false,
   });
 export { injectedRtkApi as rawboxApi };
-export type GetContractsRegistryApiResponse =
+export type GetContractRegistryApiResponse =
   /** status 200 Default Response */ {
-    contractsRegistryPath: string;
-    contractsRecord:
+    contractRegistryPath: string;
+    contractRecord:
       | (string | number | boolean | null)
       | any[]
       | {
           [key: string]: any;
         };
   }[];
-export type GetContractsRegistryApiArg = void;
-export type DeleteContractsRegistryApiResponse =
+export type GetContractRegistryApiArg = void;
+export type DeleteContractRegistryApiResponse =
   /** status 200 Default Response */ {
     message: string;
   };
-export type DeleteContractsRegistryApiArg = void;
-export type PostContractsRegistryReloadSyncApiResponse =
+export type DeleteContractRegistryApiArg = void;
+export type PostContractRegistryReloadSyncApiResponse =
   /** status 201 Default Response */ {
     message: string;
   };
-export type PostContractsRegistryReloadSyncApiArg = void;
-export type PostContractsRegistryReloadAsyncApiResponse =
+export type PostContractRegistryReloadSyncApiArg = void;
+export type PostContractRegistryReloadAsyncApiResponse =
   /** status 202 Default Response */ {
     message: string;
   };
-export type PostContractsRegistryReloadAsyncApiArg = void;
+export type PostContractRegistryReloadAsyncApiArg = void;
 export type PostConstantsApiResponse = /** status 201 Default Response */ {
   workflowId: string;
   workspaceId: string;
@@ -428,10 +428,10 @@ export type PatchWorkspacesByIdApiArg = {
   };
 };
 export const {
-  useGetContractsRegistryQuery,
-  useDeleteContractsRegistryMutation,
-  usePostContractsRegistryReloadSyncMutation,
-  usePostContractsRegistryReloadAsyncMutation,
+  useGetContractRegistryQuery,
+  useDeleteContractRegistryMutation,
+  usePostContractRegistryReloadSyncMutation,
+  usePostContractRegistryReloadAsyncMutation,
   usePostConstantsMutation,
   useGetConstantsQuery,
   useGetConstantsByWorkspaceIdAndWorkflowIdKeyIdQuery,

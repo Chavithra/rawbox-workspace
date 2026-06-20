@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { and, eq } from 'drizzle-orm';
-import { Type, Static } from '@sinclair/typebox';
+import { Type, Static } from 'typebox';
 
 import { constantTable } from '../../drizzle/tables/constant.table.js';
 import {

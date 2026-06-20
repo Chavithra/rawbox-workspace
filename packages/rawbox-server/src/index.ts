@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import Fastify from 'fastify';
 
 import constantRoutes from './fastify/routes/constant.routes.js';
-import contractsRegistryRoutes from './fastify/routes/contracts-registry.routes.js';
+import ContractRegistryRoutes from './fastify/routes/contracts-registry.routes.js';
 import dbPlugin from './fastify/plugins/db.plugin.js';
 import envPlugin from './fastify/plugins/env.plugin.js';
 import swaggerPlugin from './fastify/plugins/swagger.plugin.js';
@@ -25,7 +25,7 @@ async function main() {
   });
 
   // Register routes
-  await fastify.register(contractsRegistryRoutes, {
+  await fastify.register(ContractRegistryRoutes, {
     prefix: '/contracts-registry',
   });
   await fastify.register(constantRoutes, { prefix: '/constants' });

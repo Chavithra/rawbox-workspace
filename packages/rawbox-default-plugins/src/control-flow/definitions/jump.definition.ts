@@ -1,12 +1,12 @@
 import { ok } from 'neverthrow';
-import { createControlFlowDefinition } from './contracts-registry.js';
+import { createControlFlowDefinition } from './contract-registry.js';
 
 const controlFlowDefinition = createControlFlowDefinition(
   './goto.definition.js',
-  (input) => {
-    const { runItemLabel } = input;
+  async (input) => {
+    const { label } = input;
 
-    return ok({ runItemLabel });
+    return ok({ label });
   },
 );
 

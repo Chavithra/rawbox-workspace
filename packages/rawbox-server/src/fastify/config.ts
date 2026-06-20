@@ -1,4 +1,4 @@
-import { Static, Type } from '@sinclair/typebox';
+import { type Static, Type } from 'typebox';
 
 const ConfigSchema = Type.Object({
   DATABASE_URI: Type.String({ default: 'sqlite.db' }),

@@ -23,15 +23,15 @@ function addOperationSignatureToRegistryFile(
   });
   const sourceFile = project.addSourceFileAtPath(signatureRegistryPath);
 
-  const contractsRecordProp = sourceFile.getFirstDescendant(
+  const ContractRecordProp = sourceFile.getFirstDescendant(
     (node) =>
       node.getKind() === SyntaxKind.PropertyAssignment &&
       node.getFirstChildByKind(SyntaxKind.Identifier)?.getText() ===
-        'contractsRecord',
+        'ContractRecord',
   );
 
-  if (contractsRecordProp) {
-    const objLiteral = contractsRecordProp.getFirstDescendantByKind(
+  if (ContractRecordProp) {
+    const objLiteral = ContractRecordProp.getFirstDescendantByKind(
       SyntaxKind.ObjectLiteralExpression,
     );
     if (objLiteral) {
@@ -53,7 +53,7 @@ function addOperationSignatureToRegistryFile(
       });
       sourceFile.saveSync();
       console.log(
-        `Added ./${newOperationName}.definition.js to contractsRecord.`,
+        `Added ./${newOperationName}.definition.js to ContractRecord.`,
       );
     }
   }

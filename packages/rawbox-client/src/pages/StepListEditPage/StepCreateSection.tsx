@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 
-import { useGetContractsRegistryQuery } from '@/redux/rawbox-api';
+import { useGetContractRegistryQuery } from '@/redux/rawbox-api';
 
 import {
-  ContractsRecord,
-  ContractsRecordsMap,
+  contractRecord,
+  ContractRecordsMap,
   StepCreateForm,
 } from './StepCreateForm';
 import { SortableRowProps } from './SortableRow';
@@ -20,28 +20,28 @@ export default function StepCreateSection({
   setSortableRowPropsList,
 }: StepCreateSectionProps) {
   const {
-    data: contractsRegistryList,
+    data: ContractRegistryList,
     isLoading,
     isError,
     error,
-  } = useGetContractsRegistryQuery();
+  } = useGetContractRegistryQuery();
 
-  const contractsRecordMap = useMemo(() => {
-    if (contractsRegistryList) {
-      return contractsRegistryList.reduce<ContractsRecordsMap>((acc, item) => {
-        acc[item.contractsRegistryPath] = item as ContractsRecord;
+  const ContractRecordMap = useMemo(() => {
+    if (ContractRegistryList) {
+      return ContractRegistryList.reduce<ContractRecordsMap>((acc, item) => {
+        acc[item.ContractRegistryPath] = item as ContractRecord;
         return acc;
       }, {});
     } else {
       return {};
     }
-  }, [contractsRegistryList]);
+  }, [ContractRegistryList]);
 
   if (isLoading) {
     return <div>Loading...</div>;
   } else if (isError) {
     return <div>Error: {JSON.stringify(error)}</div>;
-  } else if (contractsRegistryList) {
+  } else if (ContractRegistryList) {
     return (
       <Card>
         <CardHeader>
@@ -49,7 +49,7 @@ export default function StepCreateSection({
         </CardHeader>
         <CardContent>
           <StepCreateForm
-            contractsRecordMap={contractsRecordMap}
+            ContractRecordMap={ContractRecordMap}
             setSortableRowPropsList={setSortableRowPropsList}
           />
         </CardContent>

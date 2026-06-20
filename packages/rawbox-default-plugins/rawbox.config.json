@@ -1,6 +1,0 @@
-{
-  "contractsRegistryPathList": [
-    "./dist/src/control-flow/definitions/contracts-registry.js",
-    "dist/src/maths/contracts-registry.js"
-  ]
-}

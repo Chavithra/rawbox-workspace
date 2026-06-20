@@ -1,12 +1,12 @@
-import { Type, Static } from '@sinclair/typebox';
+import { Type, Static } from 'typebox';
 
-export type GetContractsRegistryApiResponse = Static<
-  typeof GetContractsRegistryApiResponse
+export type GetContractRegistryApiResponse = Static<
+  typeof GetContractRegistryApiResponse
 >;
-export const GetContractsRegistryApiResponse = Type.Array(
+export const GetContractRegistryApiResponse = Type.Array(
   Type.Object({
-    contractsRegistryPath: Type.String(),
-    contractsRecord: Type.Union([
+    contractRegistryPath: Type.String(),
+    contractRecord: Type.Union([
       Type.Union([Type.String(), Type.Number(), Type.Boolean(), Type.Null()]),
       Type.Array(Type.Any()),
       Type.Object(
@@ -19,46 +19,46 @@ export const GetContractsRegistryApiResponse = Type.Array(
   }),
 );
 
-export type GetContractsRegistryApiArg = Static<
-  typeof GetContractsRegistryApiArg
+export type GetContractRegistryApiArg = Static<
+  typeof GetContractRegistryApiArg
 >;
-export const GetContractsRegistryApiArg = Type.Void();
+export const GetContractRegistryApiArg = Type.Void();
 
-export type DeleteContractsRegistryApiResponse = Static<
-  typeof DeleteContractsRegistryApiResponse
+export type DeleteContractRegistryApiResponse = Static<
+  typeof DeleteContractRegistryApiResponse
 >;
-export const DeleteContractsRegistryApiResponse = Type.Object({
+export const DeleteContractRegistryApiResponse = Type.Object({
   message: Type.String(),
 });
 
-export type DeleteContractsRegistryApiArg = Static<
-  typeof DeleteContractsRegistryApiArg
+export type DeleteContractRegistryApiArg = Static<
+  typeof DeleteContractRegistryApiArg
 >;
-export const DeleteContractsRegistryApiArg = Type.Void();
+export const DeleteContractRegistryApiArg = Type.Void();
 
-export type PostContractsRegistryReloadSyncApiResponse = Static<
-  typeof PostContractsRegistryReloadSyncApiResponse
+export type PostContractRegistryReloadSyncApiResponse = Static<
+  typeof PostContractRegistryReloadSyncApiResponse
 >;
-export const PostContractsRegistryReloadSyncApiResponse = Type.Object({
+export const PostContractRegistryReloadSyncApiResponse = Type.Object({
   message: Type.String(),
 });
 
-export type PostContractsRegistryReloadSyncApiArg = Static<
-  typeof PostContractsRegistryReloadSyncApiArg
+export type PostContractRegistryReloadSyncApiArg = Static<
+  typeof PostContractRegistryReloadSyncApiArg
 >;
-export const PostContractsRegistryReloadSyncApiArg = Type.Void();
+export const PostContractRegistryReloadSyncApiArg = Type.Void();
 
-export type PostContractsRegistryReloadAsyncApiResponse = Static<
-  typeof PostContractsRegistryReloadAsyncApiResponse
+export type PostContractRegistryReloadAsyncApiResponse = Static<
+  typeof PostContractRegistryReloadAsyncApiResponse
 >;
-export const PostContractsRegistryReloadAsyncApiResponse = Type.Object({
+export const PostContractRegistryReloadAsyncApiResponse = Type.Object({
   message: Type.String(),
 });
 
-export type PostContractsRegistryReloadAsyncApiArg = Static<
-  typeof PostContractsRegistryReloadAsyncApiArg
+export type PostContractRegistryReloadAsyncApiArg = Static<
+  typeof PostContractRegistryReloadAsyncApiArg
 >;
-export const PostContractsRegistryReloadAsyncApiArg = Type.Void();
+export const PostContractRegistryReloadAsyncApiArg = Type.Void();
 
 export type PostConstantsApiResponse = Static<typeof PostConstantsApiResponse>;
 export const PostConstantsApiResponse = Type.Object({

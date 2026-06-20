@@ -1,45 +1,43 @@
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import path from 'node:path';
-import { Type, Static } from '@sinclair/typebox';
+import { Type, type Static } from 'typebox';
 
-import { ContractsRegistryLoader } from 'rawbox-plugin/contracts-registry-loader';
+import { ContractRegistryLoader } from 'rawbox-plugin/contracts-registry-loader';
 
-import { contractsRegistryTable } from '../../drizzle/tables/contracts-registry.table.js';
-import { ContractsRegistrySelectSchema } from '../../typebox/schemas/contracts-registry.schemas.js';
+import { ContractRegistryTable } from '../../drizzle/tables/contracts-registry.table.js';
+import { ContractRegistrySelectSchema } from '../../typebox/schemas/contracts-registry.schemas.js';
 
 async function refreshContractsRegistries(fastify: FastifyInstance) {
   const benchmarkFilesPath = path.resolve(
     '/home/dtp2/code/javascript/real/rawbox-workspace/packages/rawbox-default-plugins',
   );
-  const contractsRegistryPathList =
-    await ContractsRegistryLoader.loadContractsRegistryPathList(
+  const ContractRegistryPathList =
+    await ContractRegistryLoader.loadContractRegistryPathList(
       benchmarkFilesPath,
     );
 
-  await fastify.db.delete(contractsRegistryTable);
+  await fastify.db.delete(ContractRegistryTable);
 
-  for (const contractsRegistryPath of contractsRegistryPathList) {
-    console.log(contractsRegistryPath);
-    const loadContractsRegistryResult =
-      await ContractsRegistryLoader.loadContractsRegistry(
-        contractsRegistryPath,
-      );
-    if (loadContractsRegistryResult.isOk()) {
-      const contractsRegistry = loadContractsRegistryResult.value;
-      contractsRegistry.contractsRegistryPath = contractsRegistryPath;
+  for (const ContractRegistryPath of ContractRegistryPathList) {
+    console.log(ContractRegistryPath);
+    const loadContractRegistryResult =
+      await ContractRegistryLoader.loadContractRegistry(ContractRegistryPath);
+    if (loadContractRegistryResult.isOk()) {
+      const ContractRegistry = loadContractRegistryResult.value;
+      ContractRegistry.ContractRegistryPath = ContractRegistryPath;
       await fastify.db
-        .insert(contractsRegistryTable)
-        .values(contractsRegistry)
+        .insert(ContractRegistryTable)
+        .values(ContractRegistry)
         .returning();
     } else {
       fastify.log.error(
-        `Failed to load contracts registry from ${contractsRegistryPath}: ${loadContractsRegistryResult.error}`,
+        `Failed to load contracts registry from ${ContractRegistryPath}: ${loadContractRegistryResult.error}`,
       );
     }
   }
 }
 
-export default async function contractsRegistryRoutes(
+export default async function ContractRegistryRoutes(
   fastify: FastifyInstance,
   options: FastifyPluginOptions,
 ) {
@@ -51,14 +49,14 @@ export default async function contractsRegistryRoutes(
         description: 'Get all contracts registries from the database',
         tags: ['contracts-registry'],
         response: {
-          200: Type.Array(ContractsRegistrySelectSchema),
+          200: Type.Array(ContractRegistrySelectSchema),
         },
       },
     },
     async (request, reply) => {
       const contractsRegistries = await fastify.db
         .select()
-        .from(contractsRegistryTable);
+        .from(ContractRegistryTable);
 
       return reply.send(contractsRegistries);
     },
@@ -130,7 +128,7 @@ export default async function contractsRegistryRoutes(
       },
     },
     async (request, reply) => {
-      await fastify.db.delete(contractsRegistryTable);
+      await fastify.db.delete(ContractRegistryTable);
 
       return reply.send({
         message: 'All contracts registries have been deleted',

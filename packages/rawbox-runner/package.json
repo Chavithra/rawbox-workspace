@@ -1,38 +1,35 @@
 {
-  "name": "rawbox-runner",
-  "version": "1.0.0",
-  "type": "module",
-  "files": [
-    "dist"
-  ],
+  "author": "Chavithra Parana <chavithra@gmail.com>",
+  "dependencies": {
+    "neverthrow": "^8.2.0",
+    "rawbox-plugin": "*",
+    "rawbox-store": "*",
+    "typebox": "^1.1.39",
+    "xstate": "^5.32.0"
+  },
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^25.8.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  },
   "exports": {
     ".": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
+  "keywords": [],
+  "license": "BSD-3-Clause",
+  "name": "rawbox-runner",
   "scripts": {
     "build": "tsc",
+    "demo-constant": "npm run build && node dist/demo/demo-constant.js",
+    "demo-select": "npm run build && node dist/demo/demo-select.js",
+    "demo-xstate": "npm run build && node dist/demo/demo-xstate.js",
     "start": "npm run build && node dist/index.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "test-store": "npm run build && node dist/test-store.js",
-    "agent-runner": "npm run build && node dist/agent-runner.js",
-    "demo-operation": "npm run build && node dist/demo-operation.js",
-    "demo-agent": "npm run build && node dist/demo-agent.js",
-    "test-worker": "npm run build && node dist/test-worker.js"
+    "test": "vitest run tests"
   },
-  "keywords": [],
-  "author": "",
-  "license": "BSD-3-Clause",
-  "devDependencies": {
-    "@types/benchmark": "^2.1.5",
-    "@types/node": "^25.3.2",
-    "benchmark": "^2.1.4",
-    "typescript": "^5.8.3"
-  },
-  "dependencies": {
-    "typebox": "^1.1.5",
-    "glob": "^11.0.3",
-    "neverthrow": "^8.2.0",
-    "uuid": "^11.1.0",
-    "xstate": "^5.20.1"
-  },
-  "description": ""
+  "type": "module",
+  "version": "1.0.0"
 }

@@ -1,25 +1,39 @@
 {
-  "name": "rawbox-default-plugins",
-  "version": "1.0.0",
-  "exports": {
-    "./control-flow-definition": "./dist/src/control-flow/core/control-flow-definition.js",
-    "./control-flow-definition-cache": "./dist/src/control-flow/core/control-flow-definition-cache.js",
-    "./control-flow-definition-builder": "./dist/src/control-flow/core/control-flow-definition-builder.js"
+  "author": "Chavithra Parana <chavithra@gmail.com>",
+  "dependencies": {
+    "typebox": "^1.1.39",
+    "neverthrow": "^8.2.0",
+    "rawbox-plugin": "*"
   },
-  "scripts": {
-    "build": "tsc"
-  },
-  "keywords": [],
-  "author": "",
-  "type": "module",
-  "license": "BSD-3-Clause",
   "description": "",
   "devDependencies": {
-    "@types/node": "^25.3.2",
-    "typescript": "^5.8.3"
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   },
-  "dependencies": {
-    "@sinclair/typebox": "^0.34.38",
-    "neverthrow": "^8.2.0"
-  }
+  "exports": {
+    "./control-flow-definition": {
+      "default": "./dist/src/control-flow/core/control-flow-definition.js",
+      "types": "./dist/src/control-flow/core/control-flow-definition.d.ts"
+    },
+    "./control-flow-definition-builder": {
+      "default": "./dist/src/control-flow/core/control-flow-definition-builder.js",
+      "types": "./dist/src/control-flow/core/control-flow-definition-builder.d.ts"
+    },
+    "./control-flow-definition-cache": {
+      "default": "./dist/src/control-flow/core/control-flow-definition-cache.js",
+      "types": "./dist/src/control-flow/core/control-flow-definition-cache.d.ts"
+    }
+  },
+  "keywords": [],
+  "license": "BSD-3-Clause",
+  "name": "rawbox-default-plugins",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint .",
+    "test": "vitest run tests",
+    "type-check": "tsc --noEmit"
+  },
+  "type": "module",
+  "version": "1.0.0"
 }

@@ -1,6 +1,6 @@
 CREATE TABLE `contracts-registry` (
-	`contractsRegistryPath` text PRIMARY KEY NOT NULL,
-	`contractsRecord` text NOT NULL
+	`ContractRegistryPath` text PRIMARY KEY NOT NULL,
+	`ContractRecord` text NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE `constant` (

@@ -1,6 +1,6 @@
 import fp from 'fastify-plugin';
 import env, { FastifyEnvOptions } from '@fastify/env';
-import { Static, Type } from '@sinclair/typebox';
+import { Static, Type } from 'typebox';
 
 // Define the schema for your environment variables using TypeBox.
 // This provides validation and type inference.
