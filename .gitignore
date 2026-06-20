@@ -1,5 +1,29 @@
+# CONFIG
+.env
+
+# DATABASE
+*.db
+*.mdb
+
+# IDE
 .vscode
-dist
-node_modules
+
+# NPM
+node_modules/
+dist/
+dist-ssr/
+
+# OS
+.DS_Store
+
+# PYTHON
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# TEST
+coverage/
+
+# USER
 data
-note
+notes
