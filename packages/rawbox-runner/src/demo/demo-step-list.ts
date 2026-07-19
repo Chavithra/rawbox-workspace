@@ -1,142 +1,94 @@
-import type { Step } from '../step-types.js';
-import { Box } from 'rawbox-store';
+import type { Step } from '../workflow/step-types.js';
+import type { Workflow } from '../workflow/workflow-types.js';
+import type { Workspace } from '../workspace/workspace-types.js';
+import { ContractRegistryCache } from 'rawbox-plugin/core';
+import { contractRegistry } from '../../../rawbox-plugin-default/dist/contract-registry.js';
 
-const workflow = 'simple';
-const workspace = 'counting';
+// ---------------------------------------------------------------------------
+// 1. Register the plugin's contract registry into the cache
+// ---------------------------------------------------------------------------
+const contractRegistryCache = new ContractRegistryCache();
+const registryHash = contractRegistryCache.addContractRegistry(contractRegistry);
+
+// ---------------------------------------------------------------------------
+// 2. Define the workspace
+// ---------------------------------------------------------------------------
+const workspace: Workspace = {
+  name: 'counting',
+  workflowPathList: ['./workflows/simple.json'],
+};
+
+// ---------------------------------------------------------------------------
+// 3. Build the step list
+// ---------------------------------------------------------------------------
+const workflowName = 'simple';
 const strategy = {
   name: 'lmdb-kv' as const,
   valueSizeMax: 2022,
 };
 
-export const stepList: Step[] = [
+const stepList: Step[] = [
   {
     definitionLocation: {
-      contractRegistryPath:
-        '/run/media/dtp1/workspace/code/javascript/real/rawbox-workspace/packages/rawbox-default-plugins/dist/maths/contract-registry.js',
-      definitionPath: './sum.definition.js',
+      contractRegistryHash: registryHash,
+      definitionPath: './time/workflow-throttle.definition.js',
     },
-    inputBoxLocationRecord: {
-      a: {
-        key: 1000,
-        workflow,
-        workspace,
-        strategy,
+    storageLocation: {
+      input: {
+        ms: { key: '1000', strategy },
       },
-      b: {
-        key: 1001,
-        workflow,
-        workspace,
-        strategy,
+      output: {
+        throttledMs: { key: '1100', strategy },
+        timestamp: { key: '1101', strategy },
+      },
+      error: {
+        message: { key: '1200', strategy },
       },
     },
-    outputBoxLocationRecord: {
-      value: {
-        key: 1100,
-        workflow,
-        workspace,
-        strategy,
-      },
-    },
-    errorBoxLocationRecord: {
-      message: {
-        key: 1200,
-        workflow,
-        workspace,
-        strategy,
-      },
-    },
+    label: 'throttle-step-1',
   },
   {
     definitionLocation: {
-      contractRegistryPath:
-        '/run/media/dtp1/workspace/code/javascript/real/rawbox-workspace/packages/rawbox-default-plugins/dist/maths/contract-registry.js',
-      definitionPath: './mul.definition.js',
+      contractRegistryHash: registryHash,
+      definitionPath: './time/workflow-throttle.definition.js',
     },
-    inputBoxLocationRecord: {
-      a: {
-        key: 2000,
-        workflow,
-        workspace,
-        strategy,
+    storageLocation: {
+      input: {
+        ms: { key: '2000', strategy },
       },
-      b: {
-        key: 2001,
-        workflow,
-        workspace,
-        strategy,
+      output: {
+        throttledMs: { key: '2100', strategy },
+        timestamp: { key: '2101', strategy },
       },
-      c: {
-        key: 2002,
-        workflow,
-        workspace,
-        strategy,
+      error: {
+        message: { key: '2200', strategy },
       },
     },
-    outputBoxLocationRecord: {
-      value: {
-        key: 2100,
-        workflow,
-        workspace,
-        strategy,
-      },
-    },
-    errorBoxLocationRecord: {
-      message: {
-        key: 2200,
-        workflow,
-        workspace,
-        strategy,
-      },
-    },
+    label: 'throttle-step-2',
   },
 ];
 
-export const box1000: Box<number> = {
-  content: 1,
-  location: {
-    key: 2000,
-    workflow,
-    workspace,
-    strategy,
-  },
+// ---------------------------------------------------------------------------
+// 4. Assemble the workflow
+// ---------------------------------------------------------------------------
+const workflow: Workflow = {
+  name: workflowName,
+  pluginPathList: ['rawbox-default-plugins'],
+  stepList,
+  seedData: [
+    { key: stepList[0]!.storageLocation.input['ms']!.key, strategy: stepList[0]!.storageLocation.input['ms']!.strategy, value: 50 },
+    { key: stepList[1]!.storageLocation.input['ms']!.key, strategy: stepList[1]!.storageLocation.input['ms']!.strategy, value: 30 },
+  ],
 };
 
-export const box1001: Box<number> = {
-  content: 2,
-  location: {
-    key: 2000,
-    workflow,
-    workspace,
-    strategy,
-  },
-};
 
-export const box2000: Box<number> = {
-  content: 10,
-  location: {
-    key: 2000,
-    workflow,
-    workspace,
-    strategy,
-  },
-};
-
-export const box2001: Box<number> = {
-  content: 20,
-  location: {
-    key: 2001,
-    workflow,
-    workspace,
-    strategy,
-  },
-};
-
-export const box2002: Box<number> = {
-  content: 30,
-  location: {
-    key: 2002,
-    workflow,
-    workspace,
-    strategy,
-  },
-};
+// ---------------------------------------------------------------------------
+// 5. Print the results
+// ---------------------------------------------------------------------------
+console.log('Workspace:', JSON.stringify(workspace, null, 2));
+console.log('\nWorkflow:', JSON.stringify(workflow, null, 2));
+console.log('\nStep count:', workflow.stepList.length);
+console.log(
+  '\nDefinition locations:',
+  workflow.stepList.map((s) => s.definitionLocation),
+);

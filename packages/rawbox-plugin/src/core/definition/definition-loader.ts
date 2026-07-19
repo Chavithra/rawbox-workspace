@@ -1,4 +1,4 @@
-import { err, Result } from 'neverthrow';
+import { err, type Result } from 'neverthrow';
 import type { ContractRegistryCache } from '../contracts/contract-registry-cache.js';
 import type { DefinitionLocation } from './definition-types.js';
 import {
@@ -20,25 +20,31 @@ export async function loadDefinition(
   definitionLocation: DefinitionLocation,
   contractRegistryCache: ContractRegistryCache,
 ): Promise<Result<LoadedOperationDefinition | LoadedControlFlowDefinition, string>> {
-  const registryResult = await contractRegistryCache.getOrLoadContractRegistry(
-    definitionLocation.contractRegistryPath,
+  let registry = contractRegistryCache.getContractRegistry(
+    definitionLocation.contractRegistryHash,
   );
-  if (registryResult.isErr()) {
-    return err(`Failed to load registry: ${registryResult.error}`);
+  if (!registry) {
+    return err(
+      `Registry with hash "${definitionLocation.contractRegistryHash}" is not loaded in the cache. Make sure the plugin is registered/loaded in your workspace config.`,
+    );
   }
-
-  const registry = registryResult.value;
   const contract = registry.contractRecord[definitionLocation.definitionPath];
   if (!contract) {
     return err(`Contract not found in registry: ${definitionLocation.definitionPath}`);
   }
 
   if (contract.type === 'operation') {
-    return await loadOperationDefinition(definitionLocation);
+    return await loadOperationDefinition({
+      contractRegistryHash: registry.contractRegistryPath,
+      definitionPath: definitionLocation.definitionPath,
+    });
   }
 
   if (contract.type === 'control-flow') {
-    return await loadControlFlowDefinition(definitionLocation);
+    return await loadControlFlowDefinition({
+      contractRegistryHash: registry.contractRegistryPath,
+      definitionPath: definitionLocation.definitionPath,
+    });
   }
 
   return err(`Unknown contract type: ${contract.type}`);

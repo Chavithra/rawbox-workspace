@@ -1,0 +1,31 @@
+{
+  "author": "Chavithra Parana <chavithra@gmail.com>",
+  "dependencies": {
+    "typebox": "^1.1.39",
+    "neverthrow": "^8.2.0",
+    "rawbox-plugin": "*"
+  },
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  },
+  "exports": {
+    "./contract-registry": {
+      "types": "./dist/contract-registry.d.ts",
+      "default": "./dist/contract-registry.js"
+    }
+  },
+  "keywords": [],
+  "license": "BSD-3-Clause",
+  "name": "rawbox-plugin-default",
+  "scripts": {
+    "build": "rm -rf dist tsconfig.tsbuildinfo && tsc",
+    "lint": "eslint .",
+    "test": "vitest run tests",
+    "type-check": "tsc --noEmit"
+  },
+  "type": "module",
+  "version": "1.0.0"
+}

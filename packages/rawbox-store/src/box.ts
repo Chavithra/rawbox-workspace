@@ -14,13 +14,25 @@ export const BoxStrategy = Type.Union([LmdbKV, LmdbFIFO]);
 export type BoxStrategy = Static<typeof BoxStrategy>;
 
 export const BoxLocation = Type.Object({
-  key: Type.Readonly(Type.Number()),
+  key: Type.Readonly(Type.String()),
   workflow: Type.Readonly(Type.String()),
   workspace: Type.Readonly(Type.String()),
   strategy: Type.Readonly(BoxStrategy),
 });
-
 export type BoxLocation = Static<typeof BoxLocation>;
+
+export const WriteBoxLocation = Type.Object({
+  key: Type.Readonly(Type.String()),
+  strategy: Type.Readonly(BoxStrategy),
+});
+export type WriteBoxLocation = Static<typeof WriteBoxLocation>;
+
+export const ReadBoxLocation = Type.Object({
+  key: Type.Readonly(Type.String()),
+  strategy: Type.Readonly(BoxStrategy),
+  workflow: Type.Optional(Type.Readonly(Type.String())),
+});
+export type ReadBoxLocation = Static<typeof ReadBoxLocation>;
 
 export const Box = <T extends TSchema>(TValue: T) =>
   Type.Object({
@@ -33,7 +45,5 @@ export interface Box<TValue> {
   readonly location: BoxLocation;
 }
 
-export const BoxLocationRecord = Type.Record(Type.String(), BoxLocation);
+export const BoxLocationRecord = Type.Record(Type.String(), Type.Union([WriteBoxLocation, ReadBoxLocation]));
 export type BoxLocationRecord = Static<typeof BoxLocationRecord>;
-
-

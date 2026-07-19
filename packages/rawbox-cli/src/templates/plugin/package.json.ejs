@@ -1,0 +1,30 @@
+{
+  "name": "<%= pluginName %>",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Rawbox plugin: <%= pluginName %>",
+  "main": "dist/contract-registry.js",
+  "exports": {
+    "./contract-registry": {
+      "types": "./dist/contract-registry.d.ts",
+      "default": "./dist/contract-registry.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run tests",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "neverthrow": "^8.2.0",
+    "rawbox-plugin": "*",
+    "typebox": "^1.1.39"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  },
+  "license": "BSD-3-Clause"
+}

@@ -5,7 +5,8 @@
     "rawbox-plugin": "*",
     "rawbox-store": "*",
     "typebox": "^1.1.39",
-    "xstate": "^5.32.0"
+    "xstate": "^5.32.0",
+    "yaml": "^2.9.0"
   },
   "description": "",
   "devDependencies": {
@@ -24,8 +25,6 @@
   "name": "rawbox-runner",
   "scripts": {
     "build": "tsc",
-    "demo-constant": "npm run build && node dist/demo/demo-constant.js",
-    "demo-select": "npm run build && node dist/demo/demo-select.js",
     "demo-xstate": "npm run build && node dist/demo/demo-xstate.js",
     "start": "npm run build && node dist/index.js",
     "test": "vitest run tests"

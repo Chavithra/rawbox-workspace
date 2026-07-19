@@ -58,7 +58,7 @@ export class ControlFlowDynamicCaller<
     const contractRegistryPath = registry.contractRegistryPath;
 
     const definitionLocation: DefinitionLocation = {
-      contractRegistryPath,
+      contractRegistryHash: contractRegistryPath,
       definitionPath,
     };
 

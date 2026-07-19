@@ -13,13 +13,13 @@ import { type Box, type BoxLocation } from '../box.js';
 import { type BoxStore } from './box-store.js';
 import { fileURLToPath } from 'node:url';
 
-export class LmdbDbiCache<TValue = unknown, TKey extends Key = number> {
+export class LmdbDbiCache<TValue = unknown, TKey extends Key = string> {
   public constructor(
     public readonly env: RootDatabase,
     public readonly dbiOptions: DatabaseOptions = {
+      cache: false,
       compression: true,
       encoding: 'msgpack',
-      keyEncoding: 'uint32',
     },
     private readonly dbiMap: Map<string, Database<TValue, TKey>> = new Map<
       string,
@@ -60,7 +60,9 @@ export class LmdbDbiCache<TValue = unknown, TKey extends Key = number> {
 export class LmdbEnvCache<TValue, TKey extends Key> {
   public constructor(
     public readonly rootDirectoryUrl: URL,
-    public readonly envOptions: RootDatabaseOptions = {},
+    public readonly envOptions: RootDatabaseOptions = {
+      cache: false,
+    },
     private readonly envMap: Map<string, RootDatabase<TValue, TKey>> = new Map<
       string,
       RootDatabase<TValue, TKey>
@@ -103,24 +105,8 @@ export class LmdbEnvCache<TValue, TKey extends Key> {
 }
 
 class BoxStoreLmdbKv implements BoxStore {
-  public static buildDbiKey(key: number): Result<number, string> {
-    /** Creates a binary:
-     * - with 0x000 at the first 12 bits
-     * - with key in the last 20 bits (max 1,048,575 elements)
-     */
-    let result: Result<number, string>;
-
-    if (key <= 0xfffff && key >= 0) {
-      result = ok((0x00 << 20) | (key & 0xfffff));
-    } else {
-      result = err(`CRITICAL: key '${key}' should be between 0 and 1,048,575`);
-    }
-
-    return result;
-  }
-
   public static getStatic(
-    dbi: Database<unknown, number>,
+    dbi: Database<unknown, string>,
     boxLocation: BoxLocation,
   ): Result<unknown, string> {
     let result: Result<unknown, string>;
@@ -129,9 +115,7 @@ class BoxStoreLmdbKv implements BoxStore {
     const strategyName = boxLocation.strategy.name;
 
     if (strategyName == 'lmdb-kv') {
-      const dbiKey = BoxStoreLmdbKv.buildDbiKey(key)._unsafeUnwrap();
-
-      const value = dbi.get(dbiKey);
+      const value = dbi.get(key);
 
       result = value !== undefined ? ok(value) : err('Value not found');
     } else {
@@ -142,7 +126,7 @@ class BoxStoreLmdbKv implements BoxStore {
   }
 
   public static putStatic(
-    dbi: Database<unknown, number>,
+    dbi: Database<unknown, string>,
     box: Box<unknown>,
   ): Result<void, string> {
     let result: Result<void, string>;
@@ -152,9 +136,7 @@ class BoxStoreLmdbKv implements BoxStore {
     const strategyName = box.location.strategy.name;
 
     if (strategyName == 'lmdb-kv') {
-      const dbiKey = BoxStoreLmdbKv.buildDbiKey(key)._unsafeUnwrap();
-
-      dbi.putSync(dbiKey, content);
+      dbi.putSync(key, content);
 
       result = ok();
     } else {
@@ -164,7 +146,7 @@ class BoxStoreLmdbKv implements BoxStore {
     return result;
   }
 
-  public constructor(public readonly dbiCache: LmdbDbiCache<unknown, number>) {}
+  public constructor(public readonly dbiCache: LmdbDbiCache<unknown, string>) {}
 
   public async get(boxLocation: BoxLocation): Promise<Result<unknown, string>> {
     return this.getSync(boxLocation);
@@ -193,24 +175,15 @@ class BoxStoreLmdbKv implements BoxStore {
     return BoxStoreLmdbKv.putStatic(dbi, box);
   }
 }
-const FIFO_DATA_OFFSET = 2;
-const FIFO_HEAD_OFFSET = 0;
-const FIFO_OFFSET_BIT_NUMBER = 20;
-const FIFO_TAIL_OFFSET = 1;
 
 class BoxStoreLmdbFifo implements BoxStore {
   /**
    * QueueSizeMax must be a power of 2.
-   * BoxLocation.key > 0 (to not intersect with BoxStoreLmdbKv key space).
-   *
-   * Maximum item storable = `QueueSizeMax` - 3:
-   * - 1 bit to store queue tail.
-   * - 1 bit to store queue head.
-   * - 1 bit left empty to distinguish empty state vs full state.
+   * Queue head, tail, and data items are stored using namespaced string keys.
    */
 
   public static getStatic(
-    dbiCache: LmdbDbiCache<unknown, number>,
+    dbiCache: LmdbDbiCache<unknown, string>,
     boxLocation: BoxLocation,
   ): Result<unknown, string> {
     const key = boxLocation.key;
@@ -219,30 +192,23 @@ class BoxStoreLmdbFifo implements BoxStore {
 
     let result: Result<unknown, string> = err('Unknown error');
 
-    if (key === 0) {
-      result = err('Key 0 is reserved for lmdb-kv strategy');
-    } else if (key >= 4096) {
-      result = err(
-        'Key too large: must be < 4096 for lmdb-fifo strategy to avoid bitwise overflow',
-      );
-    } else if (strategyName == 'lmdb-fifo') {
-      const dataDbiKey = (key << FIFO_OFFSET_BIT_NUMBER) | FIFO_DATA_OFFSET;
-      const dbi = dbiCache.getOrCreateDbi(workflow)._unsafeUnwrap();
-      const headDbiKey = (key << FIFO_OFFSET_BIT_NUMBER) | FIFO_HEAD_OFFSET;
+    if (strategyName == 'lmdb-fifo') {
+      const headDbiKey = `fifo:${key}:head`;
+      const tailDbiKey = `fifo:${key}:tail`;
       const queueSizeMax = boxLocation.strategy.queueSizeMax;
-      const tailDbiKey = (key << FIFO_OFFSET_BIT_NUMBER) | FIFO_TAIL_OFFSET;
 
       if ((queueSizeMax & (queueSizeMax - 1)) !== 0) {
         result = err(`queueSizeMax must be a power of 2, got ${queueSizeMax}`);
       } else {
         try {
           dbiCache.env.transactionSync(() => {
+            const dbi = dbiCache.getOrCreateDbi(workflow)._unsafeUnwrap();
             const maxOffset = queueSizeMax - 1;
             const head = (dbi.get(headDbiKey) as number) || 0;
             const tail = (dbi.get(tailDbiKey) as number) || 0;
 
             if (head !== tail) {
-              const tailDataDbiKey = dataDbiKey + tail;
+              const tailDataDbiKey = `fifo:${key}:data:${tail}`;
               const content = dbi.get(tailDataDbiKey);
               const nextTail = (tail + 1) & maxOffset;
 
@@ -265,7 +231,7 @@ class BoxStoreLmdbFifo implements BoxStore {
   }
 
   public static putStatic(
-    dbiCache: LmdbDbiCache<unknown, number>,
+    dbiCache: LmdbDbiCache<unknown, string>,
     box: Box<unknown>,
   ): Result<void, string> {
     const content = box.content;
@@ -275,24 +241,17 @@ class BoxStoreLmdbFifo implements BoxStore {
 
     let result: Result<void, string> = err('Unknown error');
 
-    if (key === 0) {
-      result = err('Key 0 is reserved for lmdb-kv strategy');
-    } else if (key >= 4096) {
-      result = err(
-        'Key too large: must be < 4096 for lmdb-fifo strategy to avoid bitwise overflow',
-      );
-    } else if (strategyName == 'lmdb-fifo') {
-      const dataDbiKey = (key << FIFO_OFFSET_BIT_NUMBER) | FIFO_DATA_OFFSET;
-      const dbi = dbiCache.getOrCreateDbi(workflow)._unsafeUnwrap();
-      const headDbiKey = (key << FIFO_OFFSET_BIT_NUMBER) | FIFO_HEAD_OFFSET;
+    if (strategyName == 'lmdb-fifo') {
+      const headDbiKey = `fifo:${key}:head`;
+      const tailDbiKey = `fifo:${key}:tail`;
       const queueSizeMax = box.location.strategy.queueSizeMax;
-      const tailDbiKey = (key << FIFO_OFFSET_BIT_NUMBER) | FIFO_TAIL_OFFSET;
 
       if ((queueSizeMax & (queueSizeMax - 1)) !== 0) {
         result = err(`queueSizeMax must be a power of 2, got ${queueSizeMax}`);
       } else {
         try {
           dbiCache.env.transactionSync(() => {
+            const dbi = dbiCache.getOrCreateDbi(workflow)._unsafeUnwrap();
             const maxOffset = queueSizeMax - 1;
             const head = (dbi.get(headDbiKey) as number) || 0;
             const tail = (dbi.get(tailDbiKey) as number) || 0;
@@ -300,7 +259,7 @@ class BoxStoreLmdbFifo implements BoxStore {
             const nextHead = (head + 1) & maxOffset;
 
             if (nextHead !== tail) {
-              const headDataDbiKey = dataDbiKey + head;
+              const headDataDbiKey = `fifo:${key}:data:${head}`;
 
               dbi.putSync(headDataDbiKey, content);
               dbi.putSync(headDbiKey, nextHead);
@@ -321,7 +280,7 @@ class BoxStoreLmdbFifo implements BoxStore {
     return result;
   }
 
-  public constructor(public readonly dbiCache: LmdbDbiCache<unknown, number>) {}
+  public constructor(public readonly dbiCache: LmdbDbiCache<unknown, string>) {}
 
   public async get(boxLocation: BoxLocation): Promise<Result<unknown, string>> {
     return this.getSync(boxLocation);
@@ -345,18 +304,18 @@ export class BoxStoreLmdb implements BoxStore {
   public readonly boxStoreLmdbKv: BoxStoreLmdbKv;
 
   public static create(workspace: string, rootDirectoryUrl: URL): BoxStoreLmdb {
-    const envCache = new LmdbEnvCache<unknown, number>(rootDirectoryUrl);
+    const envCache = new LmdbEnvCache<unknown, string>(rootDirectoryUrl);
 
     const env = envCache.getOrCreateEnv(workspace)._unsafeUnwrap();
 
-    const dbiCache = new LmdbDbiCache<unknown, number>(env);
+    const dbiCache = new LmdbDbiCache<unknown, string>(env);
 
     const boxStore = new BoxStoreLmdb(dbiCache);
 
     return boxStore;
   }
 
-  public constructor(public readonly dbiCache: LmdbDbiCache<unknown, number>) {
+  public constructor(public readonly dbiCache: LmdbDbiCache<unknown, string>) {
     this.boxStoreLmdbFifo = new BoxStoreLmdbFifo(dbiCache);
     this.boxStoreLmdbKv = new BoxStoreLmdbKv(dbiCache);
   }
@@ -396,7 +355,7 @@ export class BoxStoreLmdb implements BoxStore {
   }
 
   public transaction<T>(
-    callback: (store: BoxStoreLmdb) => Result<T, string>,
+    callback: (boxStore: BoxStoreLmdb) => Result<T, string>,
   ): Result<T, string> {
     let methodResult: Result<T, string>;
 

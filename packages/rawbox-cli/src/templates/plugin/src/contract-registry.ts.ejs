@@ -1,0 +1,32 @@
+import { Type } from 'typebox';
+import { setupPluginRegistry } from 'rawbox-plugin';
+
+const operationsRecord = {
+  './operations/hello-world.definition.js': {
+    type: 'operation',
+    description: 'A hello world operation example',
+    inputSchema: Type.Object({
+      name: Type.String(),
+    }),
+    outputSchema: Type.Object({
+      greeting: Type.String(),
+    }),
+    errorSchema: Type.Object({
+      message: Type.String(),
+    }),
+    version: '1.0.0',
+  },
+} as const;
+
+const controlFlowRecord = {} as const;
+
+export const {
+  contractRegistry,
+  createOperationDefinition,
+  createControlFlowDefinition,
+} = setupPluginRegistry({
+  operationsRecord,
+  controlFlowRecord,
+});
+
+export default contractRegistry;

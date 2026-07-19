@@ -1,6 +1,7 @@
 {
   // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
+    "composite": true,
     // File Layout
     "rootDir": "./src",
     "outDir": "./dist",
@@ -9,11 +10,7 @@
     // See also https://aka.ms/tsconfig/module
     "module": "nodenext",
     "target": "esnext",
-    "types": [],
-    // For nodejs:
-    // "lib": ["esnext"],
-    // "types": ["node"],
-    // and npm install -D @types/node
+    "types": ["node"],
 
     // Other Outputs
     "sourceMap": true,
@@ -40,5 +37,11 @@
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
     "skipLibCheck": true
-  }
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../rawbox-plugin" },
+    { "path": "../rawbox-runner" },
+    { "path": "../rawbox-store" }
+  ]
 }

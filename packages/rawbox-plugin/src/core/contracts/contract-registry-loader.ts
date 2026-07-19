@@ -1,10 +1,5 @@
-import { cwd } from 'node:process';
-import path from 'node:path';
-
 import { ok, err, type Result } from 'neverthrow';
 
-import { isAbsolute } from '../entries-utils.js';
-import { RawboxPluginLoader } from './rawbox-plugin-loader.js';
 import type {
   Contract,
   ContractRegistry,
@@ -12,40 +7,11 @@ import type {
 } from './contract-registry-types.js';
 
 export class ContractRegistryLoader {
-  public static async loadContractRegistryPathList(
-    startFolderPath: string = cwd(),
-    rawboxPluginFileName: string = 'rawbox.config.json',
-  ): Promise<ContractRegistryPath[]> {
-    const rawboxPluginFileList =
-      await RawboxPluginLoader.loadValidRawboxPluginFileList(
-        startFolderPath,
-        rawboxPluginFileName,
-      );
-
-    const ContractRegistryPathList = rawboxPluginFileList.reduce(
-      (accumulator: ContractRegistryPath[], currrentRawboxFile) => {
-        const { content: rawboxPlugin, path: rawboxPluginPath } =
-          currrentRawboxFile;
-        const { ContractRegistryPathList } = rawboxPlugin;
-
-        const absolutePathList = ContractRegistryPathList.map(
-          (ContractRegistryPath) => {
-            const rawboxPluginFolderPath = path.dirname(rawboxPluginPath);
-            const absolutePath = isAbsolute(ContractRegistryPath)
-              ? ContractRegistryPath
-              : path.join(rawboxPluginFolderPath, ContractRegistryPath);
-            return absolutePath;
-          },
-        );
-
-        return [...accumulator, ...absolutePathList];
-      },
-      [],
-    );
-
-    return ContractRegistryPathList;
-  }
-
+  /**
+   * Dynamically imports a ContractRegistry from a given file path and validates its structure.
+   * @param contractRegistryPath - The file path to the registry module.
+   * @returns A promise resolving to a Result containing the registry on success, or an error string on failure.
+   */
   public static async loadContractRegistry(
     contractRegistryPath: ContractRegistryPath,
   ): Promise<Result<ContractRegistry<Contract>, string>> {
@@ -78,44 +44,5 @@ export class ContractRegistryLoader {
 
     return result;
   }
-
-  public static async loadContractRegistryList(
-    startFolderPath: string = cwd(),
-    rawboxPluginFileName: string = 'rawbox.config.json',
-  ): Promise<Result<ContractRegistry<Contract>, string>[]> {
-    const ContractRegistryPathList =
-      await ContractRegistryLoader.loadContractRegistryPathList(
-        startFolderPath,
-        rawboxPluginFileName,
-      );
-
-    const result = await Promise.all(
-      ContractRegistryPathList.map((registryPath) =>
-        ContractRegistryLoader.loadContractRegistry(registryPath),
-      ),
-    );
-
-    return result;
-  }
-
-  public static async loadValidContractRegistryList(
-    startFolderPath: string = cwd(),
-    rawboxPluginFileName: string = 'rawbox.config.json',
-  ): Promise<ContractRegistry<Contract>[]> {
-    const ContractRegistryList =
-      await ContractRegistryLoader.loadContractRegistryList(
-        startFolderPath,
-        rawboxPluginFileName,
-      );
-
-    const filtered = Array.from(
-      new Set(
-        ContractRegistryList.filter((result) => result.isOk())
-          .map((result) => result.value)
-          .flat(),
-      ),
-    );
-
-    return filtered;
-  }
 }
+
