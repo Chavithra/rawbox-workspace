@@ -3,23 +3,17 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "build:all": "npm run build --workspaces",
+    "build:all": "tsc --build",
     "test:all": "npm run test --workspaces",
     "lint": "eslint ."
   },
   "keywords": [],
   "author": "Chavithra Parana <chavithra@gmail.com>",
-  "license": "ISC",
+  "license": "BSD-3-Clause",
   "description": "",
   "type": "module",
   "workspaces": [
-    "packages/rawbox-cli",
-    "packages/rawbox-client",
-    "packages/rawbox-default-plugins",
-    "packages/rawbox-plugin",
-    "packages/rawbox-runner",
-    "packages/rawbox-server",
-    "packages/rawbox-store"
+    "packages/*"
   ],
   "devDependencies": {
     "@eslint/js": "^9.39.4",
