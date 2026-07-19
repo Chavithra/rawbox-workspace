@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "bin": "dist/index.js",
   "scripts": {
-    "build": "tsc && npm run copy:ejs",
-    "copy:ejs": "copyfiles -u 1 src/**/*.ejs dist/",
+    "build": "tsc && npm run copy:ejs && chmod +x dist/index.js",
+    "copy:ejs": "copyfiles -u 1 src/**/*.ejs src/**/*.md dist/",
     "start": "npm run build && node dist/index.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test": "vitest run tests",
     "test-bin": "npm run build && node dist/index.js"
   },
   "keywords": [],
@@ -15,16 +15,24 @@
   "license": "BSD-3-Clause",
   "description": "",
   "devDependencies": {
+    "@types/ejs": "^3.1.5",
     "@types/node": "^25.8.0",
     "@types/yargs": "^17.0.33",
     "copyfiles": "^2.4.1",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   },
   "dependencies": {
+    "@clack/prompts": "^0.9.1",
+    "ejs": "^3.1.10",
     "neverthrow": "^8.2.0",
+    "picocolors": "^1.1.1",
+    "rawbox-plugin": "*",
+    "rawbox-runner": "*",
+    "rawbox-store": "*",
     "ts-morph": "^26.0.0",
-    "yargs": "^18.0.0",
-    "yeoman-environment": "^4.4.3",
-    "yeoman-generator": "^7.5.1"
+    "tsx": "^4.19.3",
+    "yaml": "^2.9.0",
+    "yargs": "^18.0.0"
   }
 }

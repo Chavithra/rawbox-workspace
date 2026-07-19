@@ -1,0 +1,13 @@
+import { ok } from 'neverthrow';
+import { createOperationDefinition } from '<%= registryImportPath %>';
+
+const <%= camelCaseName %>Definition = createOperationDefinition(
+  '<%= definitionKeyPath %>',
+  async (input) => {
+    // TODO: Implement operation logic
+    const { x, y, z } = input;
+    return ok({ value: x * y + z });
+  }
+);
+
+export default <%= camelCaseName %>Definition;

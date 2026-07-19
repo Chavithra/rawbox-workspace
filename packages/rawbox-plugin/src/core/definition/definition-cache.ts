@@ -57,11 +57,11 @@ export function createLoadDefinition<
   return async (
     definitionLocation: DefinitionLocation,
   ): Promise<Result<TDefinition, string>> => {
-    const { contractRegistryPath, definitionPath } = definitionLocation;
+    const { contractRegistryHash, definitionPath } = definitionLocation;
 
     const definitionAbsolutePath = path.isAbsolute(definitionPath)
       ? definitionPath
-      : path.join(path.dirname(contractRegistryPath), definitionPath);
+      : path.join(path.dirname(contractRegistryHash), definitionPath);
 
     return loadDefinitionFromAbsolutePath(definitionAbsolutePath);
   };
@@ -83,8 +83,8 @@ export class DefinitionCache<
     definitionLocation: DefinitionLocation,
     forceReload: boolean = false,
   ): Promise<Result<TDefinition, string>> {
-    const { contractRegistryPath, definitionPath } = definitionLocation;
-    const cacheKey = `${contractRegistryPath}:${definitionPath}`;
+    const { contractRegistryHash, definitionPath } = definitionLocation;
+    const cacheKey = `${contractRegistryHash}:${definitionPath}`;
 
     const resultOfLoadDefinition = await this.loadDefinition(
       definitionLocation,
@@ -105,8 +105,8 @@ export class DefinitionCache<
   ): Promise<Result<void, string>> {
     let result: Result<void, string>;
 
-    const { contractRegistryPath, definitionPath } = definitionLocation;
-    const cacheKey = `${contractRegistryPath}:${definitionPath}`;
+    const { contractRegistryHash, definitionPath } = definitionLocation;
+    const cacheKey = `${contractRegistryHash}:${definitionPath}`;
 
     if (!forceReload && this.definitionMap.has(cacheKey)) {
       result = ok();

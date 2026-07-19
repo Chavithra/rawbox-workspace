@@ -8,7 +8,7 @@ import {
 } from '../contracts/contract-registry-types.js';
 
 export const DefinitionLocation = Type.Object({
-  contractRegistryPath: ContractRegistryPath,
+  contractRegistryHash: ContractRegistryPath,
   definitionPath: DefinitionPath,
 });
 

@@ -1,0 +1,12 @@
+import { ok } from 'neverthrow';
+import { createOperationDefinition } from '../contract-registry.js';
+
+const helloWorldDefinition = createOperationDefinition(
+  './operations/hello-world.definition.js',
+  async (input) => {
+    const { name } = input;
+    return ok({ greeting: `Hello, ${name}!` });
+  }
+);
+
+export default helloWorldDefinition;

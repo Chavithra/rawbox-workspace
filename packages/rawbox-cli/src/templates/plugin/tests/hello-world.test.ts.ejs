@@ -1,0 +1,10 @@
+import { expect, test } from 'vitest';
+import helloWorldDefinition from '../src/operations/hello-world.definition.js';
+
+test('hello world operation should format greeting correctly', async () => {
+  const result = await helloWorldDefinition.handler({ name: 'Rawbox Developer' });
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.greeting).toBe('Hello, Rawbox Developer!');
+  }
+});

@@ -39,7 +39,7 @@ describe('BoxStoreLmdb', () => {
     it('should put and get a value successfully', async () => {
       const box: Box<unknown> = {
         content: { foo: 'bar', count: 42 },
-        location: { workspace, workflow, key: 1, strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
+        location: { workspace, workflow, key: 'key1', strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
       };
 
       const putResult = await store.put(box);
@@ -53,11 +53,11 @@ describe('BoxStoreLmdb', () => {
     it('should overwrite a value successfully', async () => {
       const box1: Box<unknown> = {
         content: 'initial-value',
-        location: { workspace, workflow, key: 2, strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
+        location: { workspace, workflow, key: 'key2', strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
       };
       const box2: Box<unknown> = {
         content: 'updated-value',
-        location: { workspace, workflow, key: 2, strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
+        location: { workspace, workflow, key: 'key2', strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
       };
 
       await store.put(box1);
@@ -73,7 +73,7 @@ describe('BoxStoreLmdb', () => {
       const boxLocation: BoxLocation = {
         workspace,
         workflow,
-        key: 99999,
+        key: 'not-found-key',
         strategy: { name: 'lmdb-kv', valueSizeMax: 1024 },
       };
 
@@ -81,30 +81,12 @@ describe('BoxStoreLmdb', () => {
       expect(getResult.isErr()).toBe(true);
       expect(getResult._unsafeUnwrapErr()).toBe('Value not found');
     });
-
-    it('should throw an error if key is out of bounds for buildDbiKey', async () => {
-      const invalidBox: Box<unknown> = {
-        content: 'test',
-        location: { workspace, workflow, key: 1048576, strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } }, // limit is 1048575 (0xfffff)
-      };
-
-      await expect(store.put(invalidBox)).rejects.toThrow();
-
-      const invalidBoxLocation: BoxLocation = {
-        workspace,
-        workflow,
-        key: -1,
-        strategy: { name: 'lmdb-kv', valueSizeMax: 1024 },
-      };
-
-      await expect(store.get(invalidBoxLocation)).rejects.toThrow();
-    });
   });
 
   describe('lmdb-fifo strategy', () => {
     it('should put and get items in FIFO order', async () => {
       const strategy = { name: 'lmdb-fifo' as const, queueSizeMax: 4 };
-      const key = 10;
+      const key = 'fifo-key-1';
 
       const box1: Box<string> = {
         content: 'item1',
@@ -142,7 +124,7 @@ describe('BoxStoreLmdb', () => {
 
     it('should return error when queue is empty', async () => {
       const strategy = { name: 'lmdb-fifo' as const, queueSizeMax: 4 };
-      const key = 11;
+      const key = 'fifo-key-2';
       const boxLocation: BoxLocation = {
         workspace,
         workflow,
@@ -157,7 +139,7 @@ describe('BoxStoreLmdb', () => {
 
     it('should return error when queue is full', async () => {
       const strategy = { name: 'lmdb-fifo' as const, queueSizeMax: 4 };
-      const key = 12;
+      const key = 'fifo-key-3';
 
       const putItem = async (val: string) => {
         return store.put({
@@ -180,7 +162,7 @@ describe('BoxStoreLmdb', () => {
 
     it('should return error if queueSizeMax is not a power of 2', async () => {
       const invalidStrategy = { name: 'lmdb-fifo' as const, queueSizeMax: 5 };
-      const key = 13;
+      const key = 'fifo-key-4';
 
       const box: Box<string> = {
         content: 'test',
@@ -204,54 +186,6 @@ describe('BoxStoreLmdb', () => {
         'queueSizeMax must be a power of 2',
       );
     });
-
-    it('should return error if FIFO key is invalid', async () => {
-      const strategy = { name: 'lmdb-fifo' as const, queueSizeMax: 4 };
-
-      // Key 0 is reserved for lmdb-kv
-      const boxKey0: Box<string> = {
-        content: 'test',
-        location: { workspace, workflow, key: 0, strategy },
-      };
-      const putResult0 = await store.put(boxKey0);
-      expect(putResult0.isErr()).toBe(true);
-      expect(putResult0._unsafeUnwrapErr()).toBe(
-        'Key 0 is reserved for lmdb-kv strategy',
-      );
-
-      const getResult0 = await store.get({
-        workspace,
-        workflow,
-        key: 0,
-        strategy,
-      });
-      expect(getResult0.isErr()).toBe(true);
-      expect(getResult0._unsafeUnwrapErr()).toBe(
-        'Key 0 is reserved for lmdb-kv strategy',
-      );
-
-      // Key >= 4096
-      const boxKeyTooLarge: Box<string> = {
-        content: 'test',
-        location: { workspace, workflow, key: 4096, strategy },
-      };
-      const putResultTooLarge = await store.put(boxKeyTooLarge);
-      expect(putResultTooLarge.isErr()).toBe(true);
-      expect(putResultTooLarge._unsafeUnwrapErr()).toBe(
-        'Key too large: must be < 4096 for lmdb-fifo strategy to avoid bitwise overflow',
-      );
-
-      const getResultTooLarge = await store.get({
-        workspace,
-        workflow,
-        key: 4096,
-        strategy,
-      });
-      expect(getResultTooLarge.isErr()).toBe(true);
-      expect(getResultTooLarge._unsafeUnwrapErr()).toBe(
-        'Key too large: must be < 4096 for lmdb-fifo strategy to avoid bitwise overflow',
-      );
-    });
   });
 
   describe('unsupported strategy', () => {
@@ -261,7 +195,7 @@ describe('BoxStoreLmdb', () => {
         location: {
           workspace,
           workflow,
-          key: 1,
+          key: 'kv-key-invalid',
           strategy: {
             name: 'invalid-strategy' as unknown as 'lmdb-kv',
             valueSizeMax: 1024,
@@ -287,11 +221,11 @@ describe('BoxStoreLmdb', () => {
     it('should execute multiple operations and commit successfully', async () => {
       const box1: Box<unknown> = {
         content: 'tx-val-1',
-        location: { workspace, workflow, key: 100, strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
+        location: { workspace, workflow, key: 'tx-key-1', strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
       };
       const box2: Box<unknown> = {
         content: 'tx-val-2',
-        location: { workspace, workflow, key: 101, strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
+        location: { workspace, workflow, key: 'tx-key-2', strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
       };
 
       const txResult = store.transaction((txStore) => {
@@ -316,7 +250,7 @@ describe('BoxStoreLmdb', () => {
     it('should rollback changes if callback throws an error', async () => {
       const box: Box<unknown> = {
         content: 'should-not-exist-throw',
-        location: { workspace, workflow, key: 102, strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
+        location: { workspace, workflow, key: 'tx-key-3', strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
       };
 
       const txResult = store.transaction<never>((txStore) => {
@@ -336,7 +270,7 @@ describe('BoxStoreLmdb', () => {
     it('should rollback changes if callback returns a Result.err', async () => {
       const box: Box<unknown> = {
         content: 'should-not-exist-result-err',
-        location: { workspace, workflow, key: 103, strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
+        location: { workspace, workflow, key: 'tx-key-4', strategy: { name: 'lmdb-kv', valueSizeMax: 1024 } },
       };
 
       const txResult = store.transaction((txStore) => {
@@ -355,7 +289,7 @@ describe('BoxStoreLmdb', () => {
 
     it('should work when internal operations call transactionSync (lmdb-fifo uses nested transactions)', async () => {
       const strategy = { name: 'lmdb-fifo' as const, queueSizeMax: 4 };
-      const key = 20;
+      const key = 'fifo-tx-key';
 
       const box1: Box<string> = {
         content: 'fifo-tx-1',

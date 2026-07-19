@@ -1,0 +1,46 @@
+import { Type } from 'typebox';
+import {
+  setupOperationContractRegistry,
+  getOperationDefinitionBuilder,
+} from 'rawbox-plugin';
+
+const ContractRecord = {
+  './sum.definition.js': {
+    type: 'operation',
+    description: 'Sum two numbers',
+    inputSchema: Type.Object({
+      a: Type.Number(),
+      b: Type.Number(),
+    }),
+    outputSchema: Type.Object({
+      value: Type.Number(),
+    }),
+    errorSchema: Type.Object({
+      message: Type.String(),
+    }),
+    version: '1.0.0',
+  },
+  './mul.definition.js': {
+    type: 'operation',
+    description: 'Multiply two numbers',
+    inputSchema: Type.Object({
+      a: Type.Number(),
+      b: Type.Number(),
+      c: Type.Number(),
+    }),
+    outputSchema: Type.Object({
+      value: Type.Number(),
+    }),
+    errorSchema: Type.Object({
+      message: Type.String(),
+    }),
+    version: '1.0.0',
+  },
+} as const;
+
+const ContractRegistry = setupOperationContractRegistry({
+  contractRecord: ContractRecord,
+});
+
+export const createOperationDefinition = getOperationDefinitionBuilder(ContractRegistry);
+export default ContractRegistry;

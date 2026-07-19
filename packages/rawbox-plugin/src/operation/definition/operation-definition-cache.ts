@@ -59,7 +59,7 @@ export class OperationDynamicCaller<
     const contractRegistryPath = registry.contractRegistryPath;
 
     const definitionLocation: DefinitionLocation = {
-      contractRegistryPath,
+      contractRegistryHash: contractRegistryPath,
       definitionPath,
     };
 

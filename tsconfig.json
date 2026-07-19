@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/rawbox-plugin" },
+    { "path": "packages/rawbox-store" },
+    { "path": "packages/rawbox-plugin-default" },
+    { "path": "packages/rawbox-runner" },
+    { "path": "packages/rawbox-cli" }
+  ]
+}

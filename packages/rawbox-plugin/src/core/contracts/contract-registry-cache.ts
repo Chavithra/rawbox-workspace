@@ -1,180 +1,108 @@
-import { cwd } from 'node:process';
-
-import { err, ok, type Result } from 'neverthrow';
+import crypto from 'node:crypto';
 
 import type {
   Contract,
   ContractRegistry,
-  ContractRegistryPath,
 } from './contract-registry-types.js';
-import { ContractRegistryLoader } from './contract-registry-loader.js';
-import { getDefinitionPathList } from './contract-registry-utils.js';
 import type { DefinitionLocation } from '../definition/definition-types.js';
 
-/**
- * Caches ContractRegistry instances to avoid redundant dynamic imports.
- */
 export class ContractRegistryCache {
   /**
-   * Builds a ContractRegistryCache by discovering and loading all valid contracts registries
-   * based on the operation configuration files found upwards from a starting directory.
-   * @param startFolderPath - The directory to start searching from. Defaults to the current working directory.
-   * @param operationConfigFileName - The name of the operation configuration file. Defaults to "rawbox.config.json".
-   * @returns A promise that resolves to a new ContractRegistryCache instance populated with discovered registries.
-   */
-  public static async build(
-    startFolderPath: string = cwd(),
-    operationConfigFileName: string = 'rawbox.config.json',
-  ) {
-    const result = new ContractRegistryCache();
-
-    const ContractRegistryList =
-      await ContractRegistryLoader.loadValidContractRegistryList(
-        startFolderPath,
-        operationConfigFileName,
-      );
-
-    ContractRegistryList.map((ContractRegistry) => {
-      result.addContractRegistry(ContractRegistry);
-    });
-
-    return result;
-  }
-
-  /**
    * Creates an instance of ContractRegistryCache.
-   * @param registryMap - A map to store loaded registries, with registry path as key.
+   * @param registryMap - A map to store loaded registries, keyed by their SHA-256 content-hash.
    */
   public constructor(
-    private readonly registryMap: Map<
-      ContractRegistryPath,
+    protected readonly registryMap: Map<
+      string,
       ContractRegistry<Contract>
-    > = new Map<ContractRegistryPath, ContractRegistry<Contract>>(),
+    > = new Map<string, ContractRegistry<Contract>>(),
   ) {}
 
   /**
-   * Adds a SignatureRegistry instance to the cache.
-   * @param ContractRegistry - The ContractRegistry instance to add.
+   * Computes a stable, deterministic SHA-256 hash for a registry based on its sorted contractRecord keys.
+   * @param contractRegistry - The registry to hash.
+   * @returns A 64-character SHA-256 hex string.
+   */
+  public static computeHash(
+    contractRegistry: ContractRegistry<Contract>,
+  ): string {
+    const sortedRecord: Record<string, Contract> = {};
+    const sortedKeys = Object.keys(contractRegistry.contractRecord).sort();
+    for (const key of sortedKeys) {
+      sortedRecord[key] = contractRegistry.contractRecord[key]!;
+    }
+    return crypto
+      .createHash('sha256')
+      .update(JSON.stringify(sortedRecord))
+      .digest('hex');
+  }
+
+  /**
+   * Adds a ContractRegistry instance to the cache, keying it by the SHA-256 hash of its contractRecord.
+   * @param contractRegistry - The ContractRegistry instance to add.
+   * @returns The computed SHA-256 hash key.
    */
   public addContractRegistry(
     contractRegistry: ContractRegistry<Contract>,
-  ): void {
-    this.registryMap.set(
-      contractRegistry.contractRegistryPath,
-      contractRegistry,
+  ): string {
+    const hash = ContractRegistryCache.computeHash(contractRegistry);
+    this.registryMap.set(hash, contractRegistry);
+    return hash;
+  }
+
+  /**
+   * Adds multiple ContractRegistry instances to the cache.
+   * @param contractRegistries - An array of ContractRegistry instances to add.
+   * @returns An array of computed SHA-256 hash keys in the same order.
+   */
+  public addContractRegistries(
+    contractRegistries: ContractRegistry<Contract>[],
+  ): string[] {
+    return contractRegistries.map((registry) =>
+      this.addContractRegistry(registry),
     );
   }
 
   /**
-   * Retrieves a ContractRegistry instance from the cache.
-   * @param registryPath - The path of the registry to retrieve.
+   * Retrieves a ContractRegistry instance from the cache by its SHA-256 hash.
+   * @param hash - The SHA-256 hash of the registry to retrieve.
    * @returns The ContractRegistry instance if found, otherwise undefined.
    */
   public getContractRegistry<TContract extends Contract>(
-    contractRegistryPath: ContractRegistryPath,
+    hash: string,
   ): ContractRegistry<TContract> | undefined {
-    return this.registryMap.get(contractRegistryPath) as
+    if (!/^[a-f0-9]{64}$/i.test(hash)) {
+      return undefined;
+    }
+    return this.registryMap.get(hash) as
       | ContractRegistry<TContract>
       | undefined;
   }
 
   /**
-   * Retrieves a registry from the cache, or loads it if it's not already cached.
-   * @param ContractRegistryPath - The path to the registry file.
-   * @param forceReload - If true, reloads the registry even if it's already in the cache. Defaults to false.
-   * @returns A promise that resolves with a Result containing the SignatureRegistry on success, or an error string on failure.
-   */
-  public async getOrLoadContractRegistry(
-    contractRegistryPath: ContractRegistryPath,
-    forceReload: boolean = false,
-  ): Promise<Result<ContractRegistry<Contract>, string>> {
-    const registryMap = this.registryMap;
-
-    let result: Result<ContractRegistry<Contract>, string>;
-
-    const resultOfLoadRegistry = await this.loadContractRegistry(
-      contractRegistryPath,
-      forceReload,
-    );
-
-    if (resultOfLoadRegistry.isOk()) {
-      const registry = registryMap.get(contractRegistryPath);
-
-      if (registry) {
-        result = ok(registry);
-      } else {
-        result = err(
-          `SignatureRegistry at '${contractRegistryPath}' not found.`,
-        );
-      }
-    } else {
-      result = err(resultOfLoadRegistry.error);
-    }
-
-    return result;
-  }
-
-  /**
-   * Gets a list of all cached registry paths.
-   * @returns An array of strings, where each string is a path to a cached registry.
-   */
-  public getContractRegistryPathList(): string[] {
-    const registryMap = this.registryMap;
-
-    return [...registryMap.keys()];
-  }
-  /**
-   * Gets a map of all cached registries, with their paths as keys.
-   * @returns A Map where keys are registry paths and values are ContractRegistry instances.
+   * Gets a copy of the internal registry map.
+   * @returns A Map where keys are SHA-256 registry hashes and values are ContractRegistry instances.
    */
   public getContractRegistryMap(): Map<
-    ContractRegistryPath,
+    string,
     ContractRegistry<Contract>
   > {
     return structuredClone(this.registryMap);
   }
 
   /**
-   * Loads a registry into the cache from a given path.
-   * If the registry is already cached, it will not be reloaded unless `forceReload` is true.
-   * @param registryPath - The path to the registry file to load.
-   * @param forceReload - If true, reloads the registry even if it's already in the cache. Defaults to false.
-   * @returns A promise that resolves with a Result. `ok(void)` on success, or `err(string)` on failure.
+   * Returns a list of definition locations for all cached registry schemas.
    */
-  public async loadContractRegistry(
-    registryPath: ContractRegistryPath,
-    forceReload: boolean = false,
-  ): Promise<Result<void, string>> {
-    const registryMap = this.registryMap;
-
-    let result: Result<void, string>;
-
-    if (!forceReload && registryMap.has(registryPath)) {
-      result = ok();
-    } else {
-      const resultOfLoadContractRegistry =
-        await ContractRegistryLoader.loadContractRegistry(registryPath);
-
-      if (resultOfLoadContractRegistry.isOk()) {
-        registryMap.set(registryPath, resultOfLoadContractRegistry.value);
-        result = ok();
-      } else {
-        result = err(resultOfLoadContractRegistry.error);
-      }
-    }
-
-    return result;
-  }
-
   public getDefinitionLocationList(): DefinitionLocation[] {
-    const registryMap = this.registryMap;
-
-    const result = Array.from(registryMap.values()).flatMap(
-      (contractRegistry) =>
-        getDefinitionPathList(contractRegistry).map((definitionPath) => ({
-          contractRegistryPath: contractRegistry.contractRegistryPath,
+    const result = Array.from(this.registryMap.values()).flatMap(
+      (contractRegistry) => {
+        const definitionPathList = Object.keys(contractRegistry.contractRecord);
+        const hash = ContractRegistryCache.computeHash(contractRegistry);
+        return definitionPathList.map((definitionPath) => ({
+          contractRegistryHash: hash,
           definitionPath: definitionPath,
-        })),
+        }));
+      },
     );
 
     return result;
