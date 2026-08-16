@@ -1,0 +1,63 @@
+kind: Workflow
+formatVersion: "1.0"
+name: example
+description: "A clean, self-documenting workflow example"
+
+plugins:
+  "@rawbox/rawbox-plugin-default": "^1.0.0"
+  "@acme/rawbox-plugin-kraken": "file:../../packages/rawbox-plugin-kraken"
+
+storage:
+  defaultStrategy:
+    name: lmdb-kv
+    valueSizeMax: 1900
+  keys:
+    queue_items:                # one entry states everything about one key
+      strategy:
+        name: lmdb-fifo
+        queueSizeMax: 1000
+        valueSizeMax: 1900
+      seed: [a, b, c]           # lmdb-fifo: three queue entries, one per element
+    sleep_ms:
+      seed: 500                 # no strategy: — resolves to defaultStrategy
+    is_ready:
+      seed: true
+    then_label:
+      seed: sleep-step          # a jump target is an ordinary seeded key…
+    else_label:
+      seed: __END__             # …read like any other input (FORMAT.md, "Bindings")
+
+steps:
+  - label: sleep-step
+    plugin: "@rawbox/rawbox-plugin-default"
+    operation: time/sleep
+    inputs:
+      ms: sleep_ms
+    outputs:
+      timestamp: sleep_done_at
+    errors:
+      message: sleep_error
+
+  - label: drain-step
+    plugin: "@acme/rawbox-plugin-kraken"
+    operation: queue/drain
+    inputs:
+      item: queue_items         # a get on a lmdb-fifo key dequeues one entry
+      prev:
+        key: upstream_result
+        workflow: upstream-workflow
+    outputs:
+      drained:
+        key: drained_count
+    errors:
+      message: drain_error
+
+  - label: check-ready
+    plugin: "@rawbox/rawbox-plugin-default"
+    operation: control-flow/branch
+    inputs:
+      condition: is_ready
+      thenLabel: then_label     # the label of the step to jump to
+      elseLabel: else_label     # or a reserved label: __START__/__END__/__EXIT__
+    errors:
+      message: branch_error

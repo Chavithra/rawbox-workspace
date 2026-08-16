@@ -1,15 +1,12 @@
 import { fromPromise } from 'xstate';
 
 import { err, ok, type Result } from 'neverthrow';
-import { ContractRegistryLoader } from 'rawbox-plugin/core';
-import type { ContractRegistryCache, DefinitionLocation } from 'rawbox-plugin/core';
-import type { ControlFlowContract } from 'rawbox-plugin/control-flow';
-import type { OperationContract } from 'rawbox-plugin/operation';
-import { ReservedLabel } from 'rawbox-plugin/control-flow';
+import { ContractRegistryLoader } from '@rawbox/plugin/core';
+import type { ContractRegistryCache, DefinitionLocation } from '@rawbox/plugin/core';
+import type { ControlFlowContract } from '@rawbox/plugin/control-flow';
+import type { OperationContract } from '@rawbox/plugin/operation';
+import { ReservedLabel } from '@rawbox/plugin/control-flow';
 
-/**
- * Dynamically retrieves a contract registry from cache and extracts the contract associated with the definition path.
- */
 export async function loadContract(
   definitionLocation: DefinitionLocation,
   contractRegistryCache: ContractRegistryCache,
@@ -41,11 +38,11 @@ export async function loadContract(
 }
 
 import type { MachineExecution } from '../machine-types.js';
-import type { Step } from '../../workflow/step-types.js';
-import type { Workflow } from '../../workflow/workflow-types.js';
+import type { ResolvedStep } from '../../workflow/step-types.js';
+import type { ResolvedWorkflow } from '../../workflow/workflow-types.js';
 
 export const getStepContract = async (
-  stepList: Step[],
+  stepList: ResolvedStep[],
   stepIndex: number,
   contractRegistryCache: ContractRegistryCache,
 ): Promise<Result<OperationContract | ControlFlowContract, string>> => {
@@ -61,13 +58,34 @@ export const getStepContract = async (
   );
 };
 
+/**
+ * The message a `__FAIL__` step gets when it named no reason.
+ *
+ * Shaped like `run-actor.ts`'s timeout sentence — index, plus the authored
+ * label when there is one — because it lands in exactly the same places
+ * (`run.end.error.message`, the terminal's failure line) and an operator
+ * reading either one needs to know *which* step ended the run before anything
+ * else. Naming the label as well is what makes the message actionable when the
+ * reason is missing.
+ */
+function describeFailWithoutReason(
+  stepIndex: number,
+  label: string | undefined,
+): string {
+  const named = label === undefined || label === '' ? '' : ` "${label}"`;
+  return (
+    `Step ${stepIndex}${named} ended the run as a failure ` +
+    `(${ReservedLabel.FAIL} with no reason given).`
+  );
+}
+
 export const selectFunc = async ({
   input: { contractRegistryCache, execution, workflow },
 }: {
   input: {
     contractRegistryCache: ContractRegistryCache;
     execution: MachineExecution;
-    workflow: Workflow;
+    workflow: ResolvedWorkflow;
   };
 }): Promise<Result<{
   todoStep: MachineExecution['todoStep'];
@@ -99,6 +117,34 @@ export const selectFunc = async ({
 
       if (label === ReservedLabel.EXIT) {
         output = { todoStep: null };
+      } else if (label === ReservedLabel.FAIL) {
+        // The one place a *document* can end the run as a failure. Returning
+        // `err` here is not an error in selection: it is the deliberate reuse
+        // of the path a failed step actor already takes — `resultErrorAssigner`
+        // puts this message on `context.error`, `run-workflow.ts` turns that
+        // into an error `run.end` and an `err` result, and the CLI exits 1.
+        //
+        // The step that returned the label has already reported its own
+        // `step.end` with `outcome: "ok"` (it did what it was asked), and the
+        // machine goes straight to `stopping`, so no further step starts and
+        // none is fabricated. Nothing is lost by skipping `exiting`: a
+        // control-flow step may not declare `outputs:`, and a step returning a
+        // label produced no error record, so it has nothing to write.
+        //
+        // An empty `reason` counts as none: `resultErrorAssigner` falls back to
+        // `String(error)` for an empty message, which would report the run's
+        // failure as the bare word "Error".
+        const reason = doneStep.outputRecord!['reason'];
+        return err(
+          new Error(
+            typeof reason === 'string' && reason !== ''
+              ? reason
+              : describeFailWithoutReason(
+                  doneStep.index,
+                  stepList[doneStep.index]?.label,
+                ),
+          ),
+        );
       } else if (label === ReservedLabel.START) {
         output = { todoStep: { index: 0 } };
       } else if (label === ReservedLabel.END) {
@@ -114,7 +160,9 @@ export const selectFunc = async ({
         }
       }
     } else {
-      return err(new Error(`Unknown contract type: ${(contract as any).type}`));
+      // Defensive: `contract` is narrowed to `never` here, but a registry can
+      // still carry an unrecognised type at runtime.
+      return err(new Error(`Unknown contract type: ${(contract as { type: string }).type}`));
     }
   } else {
     if (stepList.length > 0) {

@@ -1,16 +1,16 @@
 import { fromPromise } from 'xstate';
 import { ok, err, type Result } from 'neverthrow';
 
-import type { BoxStoreLmdb } from 'rawbox-store/box-store-lmdb';
-import { buildBoxRecord, type Box, type BoxLocation, type ReadBoxLocation } from 'rawbox-store';
+import type { BoxStoreLmdb } from '@rawbox/store/box-store-lmdb';
+import { type Box, type BoxLocation, type ReadBoxLocation } from '@rawbox/store';
 
 import type { MachineExecution } from '../machine-types.js';
-import type { Step } from '../../workflow/step-types.js';
-import type { Workflow } from '../../workflow/workflow-types.js';
+import type { ResolvedStep } from '../../workflow/step-types.js';
+import type { ResolvedWorkflow } from '../../workflow/workflow-types.js';
 import { getOutputBoxRecord } from './exit-actor.js';
 
 export const getInputBoxLocationRecord = (
-  stepList: Step[],
+  stepList: ResolvedStep[],
   todoStep: MachineExecution['todoStep'],
 ): Result<Record<string, ReadBoxLocation>, string> => {
   if (!todoStep) {
@@ -27,13 +27,27 @@ export const getInputBoxLocationRecord = (
   return ok(step.storageLocation.input);
 };
 
-export const syncData = (
+/**
+ * Writes the finished step's outputs and reads the next step's inputs in ONE
+ * transaction. Both halves in one commit is the point: a crash between them
+ * would leave a step's outputs visible while the successor never observed
+ * them.
+ *
+ * `async` only at the boundary. `BoxStoreLmdb.transaction` resolves a Promise
+ * but still runs its callback synchronously inside `transactionSync`, so the
+ * callback below stays synchronous — `putSync`/`getSync`, never `put`/`get`.
+ * An `await` in there would both commit an empty transaction and pin an MVCC
+ * snapshot across a suspension; see the doc comment on
+ * `BoxStoreLmdb.transaction` (`rawbox-store/src/box-store/box-store-lmdb.ts`)
+ * for why neither is recoverable. The `await` belongs here, outside.
+ */
+export const syncData = async (
   boxStoreLmdb: BoxStoreLmdb,
   inputBoxLocationRecord: Record<string, ReadBoxLocation>,
   outputBoxRecord: Record<string, Box<unknown>>,
   workflowName: string,
   workspaceName: string,
-): Result<Record<string, unknown>, string> => {
+): Promise<Result<Record<string, unknown>, string>> => {
   return boxStoreLmdb.transaction((txStore) => {
     for (const box of Object.values(outputBoxRecord)) {
       const putResult = txStore.putSync(box);
@@ -44,7 +58,6 @@ export const syncData = (
 
     const inputRecord: Record<string, unknown> = {};
     for (const [key, location] of Object.entries(inputBoxLocationRecord)) {
-      // Dynamic enrichment of workflow and workspace context on inputs
       const resolvedLocation: BoxLocation = {
         key: location.key,
         workflow: location.workflow ?? workflowName,
@@ -68,7 +81,7 @@ export const syncDbFunc = async ({
 }: {
   input: {
     boxStoreLmdb: BoxStoreLmdb;
-    workflow: Workflow;
+    workflow: ResolvedWorkflow;
     workspace: string;
     execution: MachineExecution;
   };
@@ -95,7 +108,7 @@ export const syncDbFunc = async ({
   }
   const inputBoxLocationRecord = inputBoxLocationRecordResult.value;
 
-  const inputRecordResult = syncData(
+  const inputRecordResult = await syncData(
     boxStoreLmdb,
     inputBoxLocationRecord,
     outputBoxRecord,
