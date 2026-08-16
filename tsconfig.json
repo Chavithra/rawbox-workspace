@@ -1,10 +1,35 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/rawbox-plugin" },
-    { "path": "packages/rawbox-store" },
-    { "path": "packages/rawbox-plugin-default" },
-    { "path": "packages/rawbox-runner" },
-    { "path": "packages/rawbox-cli" }
+    {
+      "path": "packages/rawbox-plugin"
+    },
+    {
+      "path": "packages/rawbox-plugin/tests"
+    },
+    {
+      "path": "packages/rawbox-store"
+    },
+    {
+      "path": "packages/rawbox-store/tests"
+    },
+    {
+      "path": "packages/rawbox-plugin-default"
+    },
+    {
+      "path": "packages/rawbox-plugin-default/tests"
+    },
+    {
+      "path": "packages/rawbox-runner"
+    },
+    {
+      "path": "packages/rawbox-runner/tests"
+    },
+    {
+      "path": "packages/rawbox-cli"
+    },
+    {
+      "path": "packages/rawbox-cli/tests"
+    }
   ]
 }

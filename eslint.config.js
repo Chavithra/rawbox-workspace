@@ -1,7 +1,5 @@
 import js from '@eslint/js';
 import globals from 'globals';
-import reactHooks from 'eslint-plugin-react-hooks';
-import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
@@ -17,43 +15,33 @@ export default tseslint.config(
       ecmaVersion: 2020,
       sourceType: 'module',
     },
+    rules: {
+      // Allow deliberately unused bindings when prefixed with `_`, e.g. params
+      // kept to satisfy a public signature, or ignored destructured fields.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+    },
   },
 
-  // Node.js specific packages (CLI, Server, Plugin, Store, Runner)
+  // Node.js specific packages (CLI, Plugin, Plugin-Default, Runner, Store)
   {
     files: [
       'packages/rawbox-cli/**/*.{ts,js}',
-      'packages/rawbox-default-plugins/**/*.{ts,js}',
       'packages/rawbox-plugin/**/*.{ts,js}',
+      'packages/rawbox-plugin-default/**/*.{ts,js}',
       'packages/rawbox-runner/**/*.{ts,js}',
-      'packages/rawbox-server/**/*.{ts,js}',
       'packages/rawbox-store/**/*.{ts,js}',
     ],
     languageOptions: {
       globals: {
         ...globals.node,
       },
-    },
-  },
-
-  // React/Browser specific package (rawbox-client)
-  {
-    files: ['packages/rawbox-client/src/**/*.{ts,tsx}'],
-    languageOptions: {
-      globals: {
-        ...globals.browser,
-      },
-    },
-    plugins: {
-      'react-hooks': reactHooks,
-      'react-refresh': reactRefresh,
-    },
-    rules: {
-      ...reactHooks.configs.recommended.rules,
-      'react-refresh/only-export-components': [
-        'warn',
-        { allowConstantExport: true },
-      ],
     },
   },
 );
