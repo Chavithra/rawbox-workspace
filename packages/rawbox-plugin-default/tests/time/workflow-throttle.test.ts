@@ -19,8 +19,7 @@ test('workflow throttle operation should wait for specified time', async () => {
 test('workflow throttle operation should throttle correctly when lastTimestamp is provided', async () => {
   const ms = 100;
   
-  // If elapsed time is less than ms, it should wait for the remaining time
-  const lastTimestamp = Date.now() - 40; // 40ms have elapsed
+  const lastTimestamp = Date.now() - 40;
   const start = Date.now();
   const result = await workflowThrottleDefinition.handler({ ms, lastTimestamp });
   const duration = Date.now() - start;
@@ -38,8 +37,7 @@ test('workflow throttle operation should throttle correctly when lastTimestamp i
 test('workflow throttle operation should not wait if elapsed time is greater than or equal to ms', async () => {
   const ms = 100;
   
-  // If elapsed time is greater than ms, it should not wait
-  const lastTimestamp = Date.now() - 150; // 150ms have elapsed
+  const lastTimestamp = Date.now() - 150;
   const start = Date.now();
   const result = await workflowThrottleDefinition.handler({ ms, lastTimestamp });
   const duration = Date.now() - start;
@@ -49,5 +47,5 @@ test('workflow throttle operation should not wait if elapsed time is greater tha
     expect(result.value.throttledMs).toBe(0);
     expect(result.value.timestamp).toBeGreaterThanOrEqual(start);
   }
-  expect(duration).toBeLessThan(25); // Should be almost immediate
+  expect(duration).toBeLessThan(25);
 });

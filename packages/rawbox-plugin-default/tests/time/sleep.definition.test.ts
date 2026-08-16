@@ -29,7 +29,9 @@ test('sleep operation should resolve almost immediately when ms is 0', async () 
 
 test('sleep operation should return validation error for negative ms', async () => {
   const handler = sleepDefinition.validatedHandler;
-  // @ts-expect-error intentionally testing invalid input
+  // `-5` is a perfectly valid `number`, so this is not a type error — the
+  // contract's `minimum: 0` is a runtime constraint, and rejecting it is
+  // exactly what `validatedHandler` exists to do.
   const result = await handler({ ms: -5 });
 
   expect(result.isErr()).toBe(true);

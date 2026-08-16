@@ -1,4 +1,4 @@
-import { ok } from 'neverthrow';
+import { ok } from '@rawbox/plugin/neverthrow';
 import { createOperationDefinition } from '../contract-registry.js';
 
 const echoDefinition = createOperationDefinition(

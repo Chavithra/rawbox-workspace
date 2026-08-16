@@ -1,8 +1,8 @@
-import { ok } from 'neverthrow';
-import { createControlFlowDefinition } from '../../contract-registry.js';
+import { ok } from '@rawbox/plugin/neverthrow';
+import { createControlFlowDefinition } from '../contract-registry.js';
 
 const loopGateDefinition = createControlFlowDefinition(
-  './control-flow/definitions/loop-gate.definition.js',
+  './control-flow/loop-gate.definition.js',
   async (input) => {
     const { counter, max, loopLabel, exitLabel } = input;
 

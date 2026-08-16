@@ -1,8 +1,8 @@
-import { ok } from 'neverthrow';
-import { createControlFlowDefinition } from '../../contract-registry.js';
+import { ok } from '@rawbox/plugin/neverthrow';
+import { createControlFlowDefinition } from '../contract-registry.js';
 
 const switchDefinition = createControlFlowDefinition(
-  './control-flow/definitions/switch.definition.js',
+  './control-flow/switch.definition.js',
   async (input) => {
     const { value, caseMap, defaultLabel } = input;
 

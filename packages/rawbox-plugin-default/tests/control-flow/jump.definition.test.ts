@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import jumpDefinition from '../../src/control-flow/definitions/jump.definition.js';
+import jumpDefinition from '../../src/control-flow/jump.definition.js';
 
 describe('jump.definition', () => {
   it('should return the next step label successfully', async () => {

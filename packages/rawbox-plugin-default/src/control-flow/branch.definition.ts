@@ -1,8 +1,8 @@
-import { ok } from 'neverthrow';
-import { createControlFlowDefinition } from '../../contract-registry.js';
+import { ok } from '@rawbox/plugin/neverthrow';
+import { createControlFlowDefinition } from '../contract-registry.js';
 
 const branchDefinition = createControlFlowDefinition(
-  './control-flow/definitions/branch.definition.js',
+  './control-flow/branch.definition.js',
   async (input) => {
     const { condition, thenLabel, elseLabel } = input;
 
