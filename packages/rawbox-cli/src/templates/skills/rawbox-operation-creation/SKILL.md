@@ -31,7 +31,7 @@ As implemented in [operation/create.ts](https://github.com/chavithra/rawbox-work
 
 > [!TIP]
 > Before writing a new operation, check whether a built-in one already covers the
-> need: `rawbox-plugin-default` ships timing (`sleep`, `workflow-throttle`), data
+> need: `@rawbox/rawbox-plugin-default` ships timing (`sleep`, `workflow-throttle`), data
 > plumbing (`echo`, `compare`, `logic`, `increment`, `assert`), observability
 > (`log`), and control-flows (`jump`, `branch`, `switch`, `loop-gate`, `halt`).
 > See its [README](https://github.com/chavithra/rawbox-workspace/blob/main/packages/rawbox-plugin-default/README.md).
@@ -51,8 +51,8 @@ You will need to specify:
 
 ### Example Contract Registry:
 ```typescript
-import { Type } from 'typebox';
-import { setupPluginRegistry } from 'rawbox-plugin';
+import { Type } from '@rawbox/plugin/typebox';
+import { setupPluginRegistry } from '@rawbox/plugin';
 
 const operationsRecord = {
   './operations/sum-numbers.definition.js': {
