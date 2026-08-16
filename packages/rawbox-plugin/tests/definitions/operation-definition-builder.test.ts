@@ -58,7 +58,6 @@ describe('OperationDefinitionBuilder', () => {
         contractRegistry.contractRecord['./mul-definition.js'],
       );
 
-      // Test the validated handler
       const result = await operationDefinition.validatedHandler({
         a: 2,
         b: 3,
@@ -88,7 +87,6 @@ describe('OperationDefinitionBuilder', () => {
         './sum-definition.js',
         // @ts-expect-error intentionally returning the wrong type to trigger output validation
         async () => {
-          // returning string instead of number to trigger validation error
           return ok({ value: 'invalid-string' });
         },
       );

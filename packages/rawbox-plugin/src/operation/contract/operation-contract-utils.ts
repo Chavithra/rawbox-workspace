@@ -1,8 +1,7 @@
-import type { TObject } from 'typebox';
-
 import type {
   ContractRecord,
   ContractRegistryPath,
+  ObjectSchemaLike,
   SpecificContractRegistry,
 } from '../../core/contracts/contract-registry-types.js';
 import { setupContractRegistry } from '../../core/contracts/contract-registry-utils.js';
@@ -32,9 +31,9 @@ export const setupOperationContractRegistry = <
   setupContractRegistry<TContractRecord>(options, 3);
 
 export function setupOperationContract<
-  ErrorSchema extends TObject = TObject,
-  InputSchema extends TObject = TObject,
-  OutputSchema extends TObject = TObject,
+  ErrorSchema extends ObjectSchemaLike = ObjectSchemaLike,
+  InputSchema extends ObjectSchemaLike = ObjectSchemaLike,
+  OutputSchema extends ObjectSchemaLike = ObjectSchemaLike,
 >(
   operationContract: OperationContract<ErrorSchema, InputSchema, OutputSchema>,
 ) {

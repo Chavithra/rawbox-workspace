@@ -1,10 +1,11 @@
-import { type TObject } from 'typebox';
-
-import { type Contract } from '../../core/contracts/contract-registry-types.js';
+import {
+  type Contract,
+  type ObjectSchemaLike,
+} from '../../core/contracts/contract-registry-types.js';
 
 export interface ControlFlowContract<
-  TInputSchema extends TObject = TObject,
-  TErrorSchema extends TObject = TObject,
+  TInputSchema extends ObjectSchemaLike = ObjectSchemaLike,
+  TErrorSchema extends ObjectSchemaLike = ObjectSchemaLike,
 > extends Contract {
   type: 'control-flow';
   description: string;

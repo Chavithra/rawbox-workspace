@@ -1,8 +1,7 @@
-import { type TObject } from 'typebox';
-
 import type {
   ContractRecord,
   ContractRegistryPath,
+  ObjectSchemaLike,
   SpecificContractRegistry,
 } from '../../core/contracts/contract-registry-types.js';
 import { setupContractRegistry } from '../../core/contracts/contract-registry-utils.js';
@@ -31,8 +30,8 @@ export const setupControlFlowContractRegistry = <
   setupContractRegistry<TContractRecord>(options, 3);
 
 export function setupControlFlowContract<
-  TInputSchema extends TObject = TObject,
-  TErrorSchema extends TObject = TObject,
+  TInputSchema extends ObjectSchemaLike = ObjectSchemaLike,
+  TErrorSchema extends ObjectSchemaLike = ObjectSchemaLike,
 >(controlFlowContract: ControlFlowContract<TInputSchema, TErrorSchema>) {
   return controlFlowContract;
 }

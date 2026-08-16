@@ -20,7 +20,7 @@ export async function loadDefinition(
   definitionLocation: DefinitionLocation,
   contractRegistryCache: ContractRegistryCache,
 ): Promise<Result<LoadedOperationDefinition | LoadedControlFlowDefinition, string>> {
-  let registry = contractRegistryCache.getContractRegistry(
+  const registry = contractRegistryCache.getContractRegistry(
     definitionLocation.contractRegistryHash,
   );
   if (!registry) {

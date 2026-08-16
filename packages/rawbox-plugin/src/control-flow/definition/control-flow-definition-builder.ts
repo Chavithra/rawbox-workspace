@@ -1,7 +1,7 @@
-import type { TObject } from 'typebox';
 import type { ControlFlowContract } from '../contract/control-flow-contract-types.js';
 import type {
   ContractRecord,
+  ObjectSchemaLike,
   SpecificContractRegistry,
 } from '../../core/contracts/contract-registry-types.js';
 import type { Handler } from '../../core/definition/definition-types.js';
@@ -9,7 +9,7 @@ import { ControlFlowDefinition, OutputSchema } from './control-flow-definition.j
 
 export class ControlFlowDefinitionBuilder<
   TContractRecord extends ContractRecord<
-    ControlFlowContract<TObject, TObject>
+    ControlFlowContract<ObjectSchemaLike, ObjectSchemaLike>
   >,
 > {
   public constructor(private readonly contractRecord: TContractRecord) {}
@@ -42,7 +42,7 @@ export class ControlFlowDefinitionBuilder<
 
 export function getControlFlowDefinitionBuilder<
   TContractRecord extends ContractRecord<
-    ControlFlowContract<TObject, TObject>
+    ControlFlowContract<ObjectSchemaLike, ObjectSchemaLike>
   >,
 >(
   contractRegistry: SpecificContractRegistry<TContractRecord>,

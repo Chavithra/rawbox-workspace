@@ -1,7 +1,7 @@
 import { err, ok } from 'neverthrow';
-import type { TObject } from 'typebox';
 import { Compile } from 'typebox/compile';
 
+import type { ObjectSchemaLike } from '../../core/contracts/contract-registry-types.js';
 import type {
   Definition,
   Handler,
@@ -9,12 +9,14 @@ import type {
 } from '../../core/definition/definition-types.js';
 import type { OperationContract } from '../contract/operation-contract-types.js';
 
-export type HandlerValidator<T extends TObject> = ReturnType<typeof Compile<T>>;
+export type HandlerValidator<T extends ObjectSchemaLike> = ReturnType<
+  typeof Compile<T>
+>;
 
 export interface HandlerValidatorSet<
-  TError extends TObject,
-  TInput extends TObject,
-  TOutput extends TObject,
+  TError extends ObjectSchemaLike,
+  TInput extends ObjectSchemaLike,
+  TOutput extends ObjectSchemaLike,
 > {
   inputValidator: HandlerValidator<TInput>;
   outputValidator: HandlerValidator<TOutput>;
@@ -22,7 +24,7 @@ export interface HandlerValidatorSet<
 }
 
 export class OperationDefinition<
-  TContract extends OperationContract<TObject, TObject, TObject>,
+  TContract extends OperationContract<ObjectSchemaLike, ObjectSchemaLike, ObjectSchemaLike>,
 > implements Definition<
   TContract,
   TContract['errorSchema'],
@@ -41,7 +43,7 @@ export class OperationDefinition<
   >;
 
   public static buildHandlerValidatorSet<
-    TContract extends OperationContract<TObject, TObject, TObject>,
+    TContract extends OperationContract<ObjectSchemaLike, ObjectSchemaLike, ObjectSchemaLike>,
   >(
     contract: TContract,
   ): HandlerValidatorSet<
@@ -57,9 +59,9 @@ export class OperationDefinition<
   }
 
   public static buildValidatedHandler<
-    TError extends TObject,
-    TInput extends TObject,
-    TOutput extends TObject,
+    TError extends ObjectSchemaLike,
+    TInput extends ObjectSchemaLike,
+    TOutput extends ObjectSchemaLike,
   >(
     handler: Handler<TError, TInput, TOutput>,
     validatorSet: HandlerValidatorSet<TError, TInput, TOutput>,

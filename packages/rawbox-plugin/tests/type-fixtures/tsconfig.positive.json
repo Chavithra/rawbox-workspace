@@ -1,0 +1,22 @@
+{
+  // Mirrors src/templates/plugin/tsconfig.json.ejs — the tsconfig a scaffolded
+  // plugin actually gets — so the cross-copy check runs under the same
+  // strictness a plugin author would. Deliberately NOT extending the package's
+  // own tsconfig: that one is `composite` with rootDir ./src, and these
+  // fixtures are a plugin's files, not the SDK's.
+  "compilerOptions": {
+    "module": "nodenext",
+    "target": "esnext",
+    "types": ["node"],
+    "noEmit": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true
+  },
+  "include": ["positive/**/*.ts"]
+}
