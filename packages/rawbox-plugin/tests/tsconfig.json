@@ -2,7 +2,18 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "rootDir": "..",
-    "noEmit": true
+    "noEmit": true,
+    "composite": false
   },
-  "include": ["**/*.ts"]
+  "include": [
+    "**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    // Compiled on purpose by tests/integration/typebox-cross-copy.test.ts,
+    // against their own tsconfigs and a second installed copy of typebox. One
+    // of them (counterfactual/) is REQUIRED to fail, so neither may take part
+    // in this project or in `npm run build:all`.
+    "type-fixtures"
+  ]
 }

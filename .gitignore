@@ -16,6 +16,7 @@ docker/
 dist/
 dist-ssr/
 node_modules/
+.npmrc
 
 # OS
 .DS_Store
@@ -31,3 +32,4 @@ coverage/
 # USER
 data
 notes
+docs

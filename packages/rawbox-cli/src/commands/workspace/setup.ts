@@ -1,25 +1,36 @@
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { setupWorkspace } from 'rawbox-runner';
+import { setupWorkspace, type SetupOptions } from '@rawbox/runner';
 
 /**
- * CLI command controller to initialize target npm package and install workflow plugins.
+ * `targetFolder` is optional: omitted, it falls back to `targetFolder:` in the
+ * workspace document and then to the workspace directory itself. The resolved
+ * folder is reported rather than the argument, because the interesting case is
+ * exactly the one where nothing was passed.
  */
 export async function setupWorkspaceCommand(
   workspacePath: string,
-  targetFolder: string,
+  targetFolder?: string | undefined,
+  options: SetupOptions = {},
 ): Promise<void> {
   const s = p.spinner();
   s.start(`Setting up workspace environment...`);
 
-  const result = await setupWorkspace(workspacePath, targetFolder);
+  const result = await setupWorkspace(workspacePath, targetFolder, options);
 
   if (result.isErr()) {
-    s.stop('Setup failed.');
+    s.error('Setup failed.');
     p.log.error(pc.red(`Error setting up workspace: ${result.error}`));
     process.exit(1);
   } else {
     s.stop('Setup completed.');
-    p.outro(pc.green(`✅ Workspace successfully setup at target directory: ${pc.cyan(targetFolder)}`));
+    if (options.installLinks) {
+      p.log.info(
+        `Installed with --install-links: \`file:\` plugins were copied and their own ` +
+          `dependencies installed, so this target folder is portable. It is a snapshot — ` +
+          `re-run setup after changing a local plugin.`,
+      );
+    }
+    p.outro(pc.green(`✅ Workspace successfully setup at target directory: ${pc.cyan(result.value)}`));
   }
 }

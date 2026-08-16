@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import loopGateDefinition from '../../src/control-flow/definitions/loop-gate.definition.js';
+import loopGateDefinition from '../../src/control-flow/loop-gate.definition.js';
 
 describe('loop-gate.definition', () => {
   it('should jump to loopLabel when counter < max', async () => {

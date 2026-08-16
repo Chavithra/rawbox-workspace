@@ -1,7 +1,7 @@
-import type { TObject } from 'typebox';
 import type { OperationContract } from '../contract/operation-contract-types.js';
 import type {
   ContractRecord,
+  ObjectSchemaLike,
   SpecificContractRegistry,
 } from '../../core/contracts/contract-registry-types.js';
 import type { Handler } from '../../core/definition/definition-types.js';
@@ -12,7 +12,7 @@ import { OperationDefinition } from './operation-definition.js';
  */
 export class OperationDefinitionBuilder<
   TContractRecord extends ContractRecord<
-    OperationContract<TObject, TObject, TObject>
+    OperationContract<ObjectSchemaLike, ObjectSchemaLike, ObjectSchemaLike>
   >,
 > {
   public constructor(private readonly contractRecord: TContractRecord) {}
@@ -48,7 +48,7 @@ export class OperationDefinitionBuilder<
 
 export function getOperationDefinitionBuilder<
   TContractRecord extends ContractRecord<
-    OperationContract<TObject, TObject, TObject>
+    OperationContract<ObjectSchemaLike, ObjectSchemaLike, ObjectSchemaLike>
   >,
 >(
   contractRegistry: SpecificContractRegistry<TContractRecord>,

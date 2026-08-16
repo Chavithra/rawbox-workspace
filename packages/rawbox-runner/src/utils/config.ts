@@ -2,8 +2,6 @@ import YAML from 'yaml';
 
 /**
  * Parses content as either JSON or YAML.
- * If a filepath is provided and ends with .yaml/.yml, it will parse it as YAML first.
- * Otherwise, it will try parsing as JSON first, falling back to YAML if JSON parsing fails.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function parseConfig(content: string, filePath?: string): any {

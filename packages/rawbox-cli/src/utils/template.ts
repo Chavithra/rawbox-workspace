@@ -13,7 +13,7 @@ export const TEMPLATES_DIR = path.resolve(__dirname, '..', 'templates');
 export async function copyTemplateFile(
   srcRelative: string,
   destPath: string,
-  data: Record<string, any> = {}
+  data: Record<string, unknown> = {}
 ) {
   const srcPath = path.join(TEMPLATES_DIR, srcRelative);
   await fs.mkdir(path.dirname(destPath), { recursive: true });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import branchDefinition from '../../src/control-flow/definitions/branch.definition.js';
+import branchDefinition from '../../src/control-flow/branch.definition.js';
 
 describe('branch.definition', () => {
   it('should jump to thenLabel when condition is true', async () => {

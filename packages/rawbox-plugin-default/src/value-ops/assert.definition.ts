@@ -1,4 +1,4 @@
-import { err, ok } from 'neverthrow';
+import { err, ok } from '@rawbox/plugin/neverthrow';
 import { createOperationDefinition } from '../contract-registry.js';
 
 const assertDefinition = createOperationDefinition(

@@ -1,0 +1,32 @@
+{
+  "name": "rawbox-plugin-pin-test",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Rawbox plugin: rawbox-plugin-pin-test",
+  "keywords": [
+    "rawbox-plugin"
+  ],
+  "main": "dist/contract-registry.js",
+  "exports": {
+    "./contract-registry": {
+      "types": "./dist/contract-registry.d.ts",
+      "default": "./dist/contract-registry.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist tsconfig.tsbuildinfo && tsc",
+    "test": "vitest run tests",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "peerDependencies": {
+    "@rawbox/plugin": "^0.2.3"
+  },
+  "devDependencies": {
+    "@rawbox/plugin": "^0.2.3",
+    "@types/node": "^26.1.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "license": "BSD-3-Clause"
+}

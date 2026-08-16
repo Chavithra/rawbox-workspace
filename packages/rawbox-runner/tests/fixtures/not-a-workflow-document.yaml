@@ -1,0 +1,38 @@
+# Not a Rawbox workflow document: no `kind:`, and it carries the resolved
+# runtime shape (`pluginPathList`, `stepList`) rather than the authoring one.
+# Kept as a fixture proving the schema rejects it. The user-facing "this is not
+# a Rawbox workflow document" message lives in validation.ts; here it only has
+# to fail the schema.
+name: example
+pluginPathList:
+  - ../../packages/rawbox-plugin-default
+seedData:
+  - key: sleep_ms
+    strategy:
+      name: lmdb-kv
+      valueSizeMax: 1900
+    value: 500
+stepList:
+  - label: sleep-step
+    definitionLocation:
+      contractRegistryHash: "92837f61c312"
+      definitionPath: ./time/sleep.definition.js
+    storageLocation:
+      input:
+        ms:
+          key: sleep_ms
+          strategy:
+            name: lmdb-kv
+            valueSizeMax: 1900
+      output:
+        timestamp:
+          key: sleep_done_at
+          strategy:
+            name: lmdb-kv
+            valueSizeMax: 1900
+      error:
+        message:
+          key: sleep_error
+          strategy:
+            name: lmdb-kv
+            valueSizeMax: 1900

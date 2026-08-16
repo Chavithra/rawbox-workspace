@@ -1,0 +1,55 @@
+{
+  "kind": "Workflow",
+  "formatVersion": "1.0",
+  "name": "example",
+  "description": "A clean, self-documenting workflow example",
+  "plugins": {
+    "@rawbox/rawbox-plugin-default": "^1.0.0",
+    "@acme/rawbox-plugin-kraken": "file:../../packages/rawbox-plugin-kraken"
+  },
+  "storage": {
+    "defaultStrategy": { "name": "lmdb-kv", "valueSizeMax": 1900 },
+    "keys": {
+      "queue_items": {
+        "strategy": { "name": "lmdb-fifo", "queueSizeMax": 1000, "valueSizeMax": 1900 },
+        "seed": ["a", "b", "c"]
+      },
+      "sleep_ms": { "seed": 500 },
+      "is_ready": { "seed": true },
+      "then_label": { "seed": "sleep-step" },
+      "else_label": { "seed": "__END__" }
+    }
+  },
+  "steps": [
+    {
+      "label": "sleep-step",
+      "plugin": "@rawbox/rawbox-plugin-default",
+      "operation": "time/sleep",
+      "inputs": { "ms": "sleep_ms" },
+      "outputs": { "timestamp": "sleep_done_at" },
+      "errors": { "message": "sleep_error" }
+    },
+    {
+      "label": "drain-step",
+      "plugin": "@acme/rawbox-plugin-kraken",
+      "operation": "queue/drain",
+      "inputs": {
+        "item": "queue_items",
+        "prev": { "key": "upstream_result", "workflow": "upstream-workflow" }
+      },
+      "outputs": { "drained": { "key": "drained_count" } },
+      "errors": { "message": "drain_error" }
+    },
+    {
+      "label": "check-ready",
+      "plugin": "@rawbox/rawbox-plugin-default",
+      "operation": "control-flow/branch",
+      "inputs": {
+        "condition": "is_ready",
+        "thenLabel": "then_label",
+        "elseLabel": "else_label"
+      },
+      "errors": { "message": "branch_error" }
+    }
+  ]
+}

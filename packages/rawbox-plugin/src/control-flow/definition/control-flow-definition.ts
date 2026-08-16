@@ -1,7 +1,11 @@
 import { err, ok } from 'neverthrow';
-import { Type, type TObject } from 'typebox';
+// `Type` stays on typebox: it builds the framework's own fixed `{ label }`
+// output schema below, which is never a plugin-supplied schema and so never
+// crosses a copy boundary.
+import { Type } from 'typebox';
 import { Compile } from 'typebox/compile';
 
+import type { ObjectSchemaLike } from '../../core/contracts/contract-registry-types.js';
 import type {
   Definition,
   Handler,
@@ -9,25 +13,51 @@ import type {
 } from '../../core/definition/definition-types.js';
 import type { ControlFlowContract } from '../contract/control-flow-contract-types.js';
 
+/**
+ * The output every control-flow handler returns, fixed by the framework.
+ *
+ * `label` is the jump target. `reason` is the **one** payload the framework
+ * carries out of a control-flow handler besides the target, and it exists for
+ * {@link ReservedLabel.FAIL}: a run ending as a failure has to be able to say
+ * why, and a control-flow contract declares no `outputSchema` of its own — so
+ * without a field here the reason could not leave the handler at all. A
+ * control-flow step may not declare `outputs:` (FORMAT.md, "`steps`"),
+ * so neither field is ever written to storage; both travel with the step's
+ * result and are read by the runner.
+ */
 export const OutputSchema = Type.Object({
   label: Type.String(),
+  reason: Type.Optional(Type.String()),
 });
 
 export const ReservedLabel = {
   START: '__START__',
   END: '__END__',
   EXIT: '__EXIT__',
+  /**
+   * Terminate the run **as a failure**: the runner turns this label into the
+   * run's error, exactly as a failed step actor does, so the `run.end` reports
+   * `outcome: "error"` and the CLI exits non-zero.
+   *
+   * The counterpart of {@link EXIT}, which terminates the run successfully.
+   * The failure's message is the handler's `reason` when it returns one
+   * (see {@link OutputSchema}); the runner supplies a default naming the step
+   * when it does not.
+   */
+  FAIL: '__FAIL__',
 } as const;
 
 export type ReservedLabel =
   (typeof ReservedLabel)[keyof typeof ReservedLabel];
 
-export type HandlerValidator<T extends TObject> = ReturnType<typeof Compile<T>>;
+export type HandlerValidator<T extends ObjectSchemaLike> = ReturnType<
+  typeof Compile<T>
+>;
 
 export interface HandlerValidatorSet<
-  TError extends TObject,
-  TInput extends TObject,
-  TOutput extends TObject,
+  TError extends ObjectSchemaLike,
+  TInput extends ObjectSchemaLike,
+  TOutput extends ObjectSchemaLike,
 > {
   inputValidator: HandlerValidator<TInput>;
   outputValidator: HandlerValidator<TOutput>;
@@ -35,7 +65,7 @@ export interface HandlerValidatorSet<
 }
 
 export class ControlFlowDefinition<
-  TContract extends ControlFlowContract<TObject, TObject>,
+  TContract extends ControlFlowContract<ObjectSchemaLike, ObjectSchemaLike>,
 > implements Definition<
   TContract,
   TContract['errorSchema'],
@@ -54,7 +84,7 @@ export class ControlFlowDefinition<
   >;
 
   public static buildHandlerValidatorSet<
-    TContract extends ControlFlowContract<TObject, TObject>,
+    TContract extends ControlFlowContract<ObjectSchemaLike, ObjectSchemaLike>,
   >(
     contract: TContract,
   ): HandlerValidatorSet<
@@ -70,9 +100,9 @@ export class ControlFlowDefinition<
   }
 
   public static buildValidatedHandler<
-    TError extends TObject,
-    TInput extends TObject,
-    TOutput extends TObject,
+    TError extends ObjectSchemaLike,
+    TInput extends ObjectSchemaLike,
+    TOutput extends ObjectSchemaLike,
   >(
     handler: Handler<TError, TInput, TOutput>,
     validatorSet: HandlerValidatorSet<TError, TInput, TOutput>,

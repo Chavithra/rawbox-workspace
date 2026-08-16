@@ -5,8 +5,11 @@ import {
   createLoadDefinition,
   createDefinitionCache,
 } from '../../core/definition/definition-cache.js';
-import { type ContractRegistry } from '../../core/contracts/contract-registry-types.js';
-import { type Static, type TObject } from 'typebox';
+import {
+  type AnyObjectSchema,
+  type ContractRegistry,
+} from '../../core/contracts/contract-registry-types.js';
+import { type Static } from 'typebox';
 import type {
   DefinitionLocation,
   ValidatedResult,
@@ -14,8 +17,8 @@ import type {
 } from '../../core/definition/definition-types.js';
 
 export type ControlFlowContractAnyObjectSchema = ControlFlowContract<
-  TObject,
-  TObject
+  AnyObjectSchema,
+  AnyObjectSchema
 >;
 
 export const loadControlFlowDefinition = createLoadDefinition<

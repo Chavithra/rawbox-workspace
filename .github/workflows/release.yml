@@ -1,0 +1,163 @@
+name: Release
+
+# Publishes all five packages when a version tag is pushed.
+#
+# The gate is deliberately the whole quality bar, not a subset: a tag is the
+# one moment a mistake becomes someone else's problem, and every check here is
+# one this repo already runs locally.
+#
+# Ordering matters and is not alphabetical. `@rawbox/cli` depends on
+# `@rawbox/runner`, which depends on `@rawbox/store` and `@rawbox/plugin`, so
+# they are published leaves-first. npm resolves those ranges at *install* time,
+# not publish time, so a wrong order would not fail here — it would leave a
+# window in which `@rawbox/cli@X` is installable and its dependency is not.
+on:
+  push:
+    tags:
+      - 'v*'
+
+# A second tag pushed while the first is publishing must not race it into the
+# registry. Not cancel-in-progress: a half-finished publish is worse than a
+# queued one.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # Required for npm provenance, which cryptographically links each tarball to
+  # this workflow run. Only meaningful on registry.npmjs.org — see the publish
+  # step, which turns it off for any other registry rather than failing.
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # The Redis-backed suites skip themselves when no server is reachable, which
+    # is right for a laptop and wrong for a release: 36 tests would silently not
+    # run at the one moment they matter most. `REDIS_URL` below is what the test
+    # harness looks for first.
+    services:
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      REDIS_URL: redis://localhost:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          # Writes the .npmrc that NODE_AUTH_TOKEN is read against. Change the
+          # repository variable to publish somewhere else (a Verdaccio, a
+          # corporate proxy); the default is the public registry.
+          registry-url: ${{ vars.NPM_REGISTRY_URL || 'https://registry.npmjs.org' }}
+
+      # Fails in seconds if the tag disagrees with the committed versions,
+      # before the build spends any time and long before anything is published.
+      - name: Check the tag matches every package version
+        run: node scripts/check-release-version.mjs "${GITHUB_REF_NAME}"
+
+      # `ci`, not `install`: it installs exactly the lockfile and fails if the
+      # lockfile and the manifests disagree, which is itself a release-blocking
+      # condition.
+      - run: npm ci
+
+      - run: npm run build:all
+
+      - run: npm run lint
+
+      - run: npm run test:all
+
+      # Publishing five packages is not atomic. If the third fails, the first
+      # two are already public and immutable. This asks the registry first, so
+      # the common re-run case — a tag pushed twice, a retried job — fails here
+      # with a clear message instead of halfway through.
+      - name: Check no package version is already published
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          failed=0
+          for name in @rawbox/store @rawbox/plugin @rawbox/runner \
+                      @rawbox/rawbox-plugin-default @rawbox/cli; do
+            if npm view "${name}@${version}" version >/dev/null 2>&1; then
+              echo "::error::${name}@${version} is already published — nothing was published by this run."
+              failed=1
+            fi
+          done
+          exit "${failed}"
+
+      # Leaves-first, so a consumer never sees a package whose dependency is
+      # not yet installable. Provenance is enabled only on the public registry:
+      # it is an npmjs feature, and passing --provenance elsewhere fails the
+      # publish rather than degrading.
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          REGISTRY: ${{ vars.NPM_REGISTRY_URL || 'https://registry.npmjs.org' }}
+        run: |
+          set -euo pipefail
+          provenance=""
+          if [ "${REGISTRY}" = "https://registry.npmjs.org" ]; then
+            provenance="--provenance"
+          else
+            echo "Publishing to ${REGISTRY}; provenance is npmjs-only and is disabled."
+          fi
+          for dir in rawbox-store rawbox-plugin rawbox-runner \
+                     rawbox-plugin-default rawbox-cli; do
+            echo "::group::publish ${dir}"
+            npm publish --workspace "packages/${dir}" --access public ${provenance}
+            echo "::endgroup::"
+          done
+
+      # The check that has actually caught a release bug in this repo: a
+      # dependency the CLI imports but never declared, invisible to every
+      # in-repo test because the monorepo hoists it, and fatal on `--version`
+      # for anyone installing from a registry. Only a clean-room install finds
+      # that class of fault, so it runs on every release rather than by hand.
+      - name: Smoke-test the published packages from a clean directory
+        env:
+          REGISTRY: ${{ vars.NPM_REGISTRY_URL || 'https://registry.npmjs.org' }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          workdir="$(mktemp -d)"
+          cd "${workdir}"
+          npm init -y >/dev/null
+          printf '@rawbox:registry=%s\n' "${REGISTRY}" > .npmrc
+          npm install "@rawbox/cli@${version}"
+
+          # Assert the resolved tree, not `--version`. `rawbox-cli --version`
+          # reports the *consuming project's* version — there is no explicit
+          # yargs `.version()`, so it walks up from the cwd and finds whatever
+          # package.json it was installed into. Checking it here would assert
+          # nothing about what was published.
+          # Read the manifest as a FILE, not through module resolution: these
+          # packages declare `exports` without a `./package.json` subpath, so
+          # `require('@rawbox/runner/package.json')` throws
+          # ERR_PACKAGE_PATH_NOT_EXPORTED — which would fail this step for a
+          # reason that has nothing to do with the release.
+          for name in @rawbox/cli @rawbox/runner @rawbox/store @rawbox/plugin; do
+            installed="$(node -p "JSON.parse(require('fs').readFileSync('node_modules/${name}/package.json','utf8')).version")"
+            if [ "${installed}" != "${version}" ]; then
+              echo "::error::${name} resolved to ${installed}, expected ${version} — an internal dependency range is pinning an older release."
+              exit 1
+            fi
+          done
+
+          # The end-to-end proof: scaffold and run. This is what would have
+          # caught a missing runtime dependency, which no in-repo test can see.
+          npx rawbox-cli workspace create --name smoke --registry "${REGISTRY}"
+          npx rawbox-cli run smoke/workflows/launch.workflow.yaml

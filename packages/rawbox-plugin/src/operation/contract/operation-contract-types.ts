@@ -1,11 +1,12 @@
-import type { TObject } from 'typebox';
-
-import type { Contract } from '../../core/contracts/contract-registry-types.js';
+import type {
+  Contract,
+  ObjectSchemaLike,
+} from '../../core/contracts/contract-registry-types.js';
 
 export interface OperationContract<
-  ErrorSchema extends TObject = TObject,
-  InputSchema extends TObject = TObject,
-  OutputSchema extends TObject = TObject,
+  ErrorSchema extends ObjectSchemaLike = ObjectSchemaLike,
+  InputSchema extends ObjectSchemaLike = ObjectSchemaLike,
+  OutputSchema extends ObjectSchemaLike = ObjectSchemaLike,
 > extends Contract {
   type: 'operation';
   description: string;

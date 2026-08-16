@@ -1,5 +1,21 @@
-import { Type } from 'typebox';
-import { setupPluginRegistry } from 'rawbox-plugin';
+import { Type } from '@rawbox/plugin/typebox';
+import type { TOptional, TUnknown } from '@rawbox/plugin/typebox';
+import { setupPluginRegistry } from '@rawbox/plugin';
+import { SNAPSHOT_VALUE_FIELD_LIST } from './observability/snapshot-fields.js';
+
+/**
+ * `{ value1: Type.Optional(Type.Unknown()), ..., value8: ... }`, built from
+ * {@link SNAPSHOT_VALUE_FIELD_LIST} rather than typed out by hand, so the
+ * contract's field names cannot drift from the list `snapshot.definition.ts`
+ * iterates at run time — see that file for why these are fixed fields rather
+ * than one `Type.Record`.
+ */
+const snapshotValueProperties: Record<
+  (typeof SNAPSHOT_VALUE_FIELD_LIST)[number],
+  TOptional<TUnknown>
+> = Object.fromEntries(
+  SNAPSHOT_VALUE_FIELD_LIST.map((field) => [field, Type.Optional(Type.Unknown())]),
+) as Record<(typeof SNAPSHOT_VALUE_FIELD_LIST)[number], TOptional<TUnknown>>;
 
 const operationsRecord = {
   "./time/workflow-throttle.definition.js": {
@@ -90,6 +106,30 @@ const operationsRecord = {
     }),
     version: '1.0.0',
   },
+  './observability/snapshot.definition.js': {
+    type: 'operation',
+    // See snapshot.definition.ts for why this is fixed `valueN` fields rather
+    // than a `Type.Record` — `OperationContract`'s `inputSchema` is bounded by
+    // `TObject`, which a `Type.Record` schema is not, and `validateSeedData`
+    // (@rawbox/runner) pairs a seed to its field via `inputSchema.properties`,
+    // which only an object schema has. Field names MUST stay in sync with
+    // `SNAPSHOT_VALUE_FIELD_LIST` in ./observability/snapshot-fields.js.
+    description: 'Emits its bound inputs as one structured log event; the whole of a read-only monitor workflow',
+    inputSchema: Type.Object({
+      label: Type.Optional(Type.String()),
+      ...snapshotValueProperties,
+    }),
+    outputSchema: Type.Object({
+      label: Type.Optional(Type.String()),
+      snapshot: Type.Record(Type.String(), Type.Unknown()),
+      count: Type.Number(),
+      timestamp: Type.Number(),
+    }),
+    errorSchema: Type.Object({
+      message: Type.String(),
+    }),
+    version: '1.0.0',
+  },
   './value-ops/assert.definition.js': {
     type: 'operation',
     description: 'Succeeds when condition is true, otherwise fails the step with the given message',
@@ -142,7 +182,7 @@ const operationsRecord = {
 } as const;
 
 const controlFlowRecord = {
-  './control-flow/definitions/jump.definition.js': {
+  './control-flow/jump.definition.js': {
     type: 'control-flow',
     description: 'Jumps to the given step label',
     inputSchema: Type.Object({
@@ -154,7 +194,7 @@ const controlFlowRecord = {
     }),
     version: '1.0.0',
   },
-  './control-flow/definitions/branch.definition.js': {
+  './control-flow/branch.definition.js': {
     type: 'control-flow',
     description: 'Jumps to thenLabel when condition is true, otherwise to elseLabel',
     inputSchema: Type.Object({
@@ -167,7 +207,7 @@ const controlFlowRecord = {
     }),
     version: '1.0.0',
   },
-  './control-flow/definitions/switch.definition.js': {
+  './control-flow/switch.definition.js': {
     type: 'control-flow',
     description: 'Jumps to the label mapped to value in caseMap, or to defaultLabel when no case matches',
     inputSchema: Type.Object({
@@ -180,7 +220,7 @@ const controlFlowRecord = {
     }),
     version: '1.0.0',
   },
-  './control-flow/definitions/loop-gate.definition.js': {
+  './control-flow/loop-gate.definition.js': {
     type: 'control-flow',
     description: 'Jumps back to loopLabel while counter < max, otherwise to exitLabel',
     inputSchema: Type.Object({
@@ -194,11 +234,25 @@ const controlFlowRecord = {
     }),
     version: '1.0.0',
   },
-  './control-flow/definitions/halt.definition.js': {
+  './control-flow/halt.definition.js': {
     type: 'control-flow',
-    description: 'Terminates the workflow early, optionally logging a reason',
+    description:
+      'Terminates the workflow early, optionally logging a reason; ends the run as a failure when fail is true',
+    // `fail` is a Boolean rather than an `outcome: ok | error` word for one
+    // reason: bindings read storage and nothing else (a binding names a storage key and no binding
+    // form carries a value), so a Boolean is the only shape another step can *compute* —
+    // `value-ops/compare` and `value-ops/logic` write exactly this type, which
+    // lets one halt step end the run either way on a condition rather than
+    // forcing two steps behind a `branch`. It also matches how every other
+    // decision in this plugin is spelled (`branch`/`jump`'s `condition`,
+    // `assert`'s `condition`).
+    //
+    // Optional, and absent means `false`: halting **successfully** is the
+    // legitimate default use of this operation, so every document written
+    // before this field existed keeps its exact behaviour.
     inputSchema: Type.Object({
       reason: Type.Optional(Type.String()),
+      fail: Type.Optional(Type.Boolean()),
     }),
     errorSchema: Type.Object({
       message: Type.String(),

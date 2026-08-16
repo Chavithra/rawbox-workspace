@@ -1,182 +1,174 @@
 # Rawbox Framework
 
-Rawbox is a self-contained automation framework built for the AI era. It empowers developers and code assistants to design, connect, and manage automations — with a focus on high observability and simple maintenance.
+Rawbox is a self-contained automation framework. You describe
+automations as **declarative YAML workflows**; Rawbox runs them as state machines with
+persistent, transactional storage — and both humans and code assistants can write,
+verify and operate them.
 
 ---
 
-## 1. Core Concepts
+## 1. Quick Start
 
-* **Operation**: A type-safe unit of work (`input → output | error`) validated at runtime by TypeBox schemas.
-* **Control-Flow**: A decision mapping inputs to step labels (like `__START__` or `__END__`) to steer execution.
-* **Rawbox-Plugin**: A modular package exposing operations and control-flows through a content-addressed registry.
-* **Workflow**: A declarative state-machine whose steps map inputs, outputs, and errors to storage keys.
-* **Workspace**: A YAML configuration registering workflows and their required plugin packages.
-* **Rawbox-Project**: A standalone project directory housing both custom plugins (`packages/`) and configurations (`workspaces/`).
+```bash
+npm install -g @rawbox/cli
+rawbox-cli workspace create --name my-workspace
+rawbox-cli run my-workspace/workflows/launch.workflow.yaml
+```
+
+Nothing to set up in between: the scaffolded workspace is runnable, and its missing plugins
+are installed on the first run.
+
+```text
+WORKFLOW launch (workspace my-workspace) ·······································
+    [info] T-minus 5
+  ✔ tick                 observability/log                            0ms
+  ✔ step-1               time/sleep                                 503ms
+  ✔ step-2               value-ops/increment                          1ms
+  ✔ step-3               value-ops/compare                            1ms
+  ✔ step-4               control-flow/branch                          1ms
+    [info] T-minus 4
+     ⋮        (three more ticks)
+    [info] T-minus 1
+    [info] Workflow halted: 🚀 Liftoff!
+  ✔ liftoff              control-flow/halt                            1ms
+
+RECAP ········································· ok=26 failed=0 skipped=0  2586ms
+```
 
 ---
 
-## 2. Core Packages
+## 2. How It Works
 
-This repository (`rawbox-workspace`) is an **npm workspaces monorepo** housing the core packages:
+Two ideas carry the whole framework:
 
-| Package | Description |
+- **Workflows** are YAML documents: a list of typed **steps**, each calling one
+  **operation** from a **plugin** (an npm package). Steps read inputs from and write
+  outputs to named **storage keys**.
+- **Workspaces** group workflows that cooperate: they share one storage environment, so
+  one workflow can read what another wrote — that is how multi-process systems are built.
+
+The generated example, abridged — plugins are declared like npm dependencies, every key is
+declared once in `storage.keys` with everything it needs, and every step maps its fields to
+those keys:
+
+```yaml
+kind: Workflow
+formatVersion: "1.0"
+name: launch
+
+plugins:
+  "@rawbox/rawbox-plugin-default": "^0.1.0"
+
+storage:
+  defaultStrategy: { name: lmdb-kv, valueSizeMax: 1900 }
+  keys:
+    t_minus: { seed: 5 }
+    minus_one: { seed: -1 }
+    zero: { seed: 0 }
+    op_gt: { seed: gt }
+    level: { seed: info }
+    tick_msg: { seed: T-minus }
+    tick_ms: { seed: 500 }
+    label_tick: { seed: tick }
+    label_liftoff: { seed: liftoff }
+    liftoff_reason: { seed: 🚀 Liftoff! }
+
+steps:
+  - label: tick
+    plugin: "@rawbox/rawbox-plugin-default"
+    operation: observability/log
+    inputs:
+      level: level
+      message: tick_msg
+      data: t_minus
+    outputs:
+      timestamp: tick_at
+
+  # time/sleep on tick_ms, value-ops/increment t_minus by minus_one, then
+  # value-ops/compare writing its result to still_counting
+
+  - plugin: "@rawbox/rawbox-plugin-default"
+    operation: control-flow/branch
+    inputs:
+      condition: still_counting
+      thenLabel: label_tick        # jump back to the labelled step — that is the loop
+      elseLabel: label_liftoff
+    errors:
+      message: branch_error
+
+  - label: liftoff
+    plugin: "@rawbox/rawbox-plugin-default"
+    operation: control-flow/halt
+    inputs:
+      reason: liftoff_reason
+```
+
+---
+
+## 3. The Packages
+
+| Package | What it does | Read its README for |
+| --- | --- | --- |
+| [@rawbox/cli](packages/rawbox-cli/README.md) | The command line: scaffold, verify, lock, run, observe | Every command, flag and output format |
+| [@rawbox/rawbox-plugin-default](packages/rawbox-plugin-default/README.md) | Built-in operations and control flow | Operations, branching, the loop pattern, monitor workflows |
+| [@rawbox/runner](packages/rawbox-runner/README.md) | The execution engine | Workflow/workspace documents, the run-event stream, OpenTelemetry |
+| [@rawbox/store](packages/rawbox-store/README.md) | Transactional storage: cells and queues, one strategy per key | Storage strategies, sizing, the read-only observers |
+| [@rawbox/plugin](packages/rawbox-plugin/README.md) | The plugin SDK | Writing your own plugins and operations |
+
+---
+
+## 4. The Documents
+
+| Document | What it covers |
 | --- | --- |
-| [rawbox-cli](packages/rawbox-cli/README.md) | Command-line interface for scaffolding projects, plugins, and operations, and for verifying/running workflows. |
-| [rawbox-plugin](packages/rawbox-plugin/README.md) | Base plugin system defining, validating, and dynamically loading contract registries. |
-| [rawbox-store](packages/rawbox-store/README.md) | Type-safe LMDB storage abstraction for KV/FIFO workflow state. |
-| [rawbox-runner](packages/rawbox-runner/README.md) | Orchestration runner executing state-machine workflows with XState. |
-| [rawbox-plugin-default](packages/rawbox-plugin-default/README.md) | Built-in operations (timing, data plumbing, observability) and control-flows (branch, switch, loop-gate, halt) available out of the box. |
+| [FORMAT.md](FORMAT.md) | The YAML grammar: every field and rule of a workflow and a workspace document |
+| [OBSERVABILITY.md](OBSERVABILITY.md) | Every event kind in the NDJSON stream, every bootstrap stage, every run status |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Working *on* Rawbox: building the clone, the verification gates, testing what a consumer gets |
 
 ---
 
-## 3. Quick Start
+## 5. Watching It Run
 
-Run the script below to install the framework and run an example sleep workflow with pre-configured schemas and inputs:
+A run narrates itself in the terminal and writes a structured NDJSON event log. Beyond
+one run, the CLI answers the three operational questions directly:
 
-```bash
-# --- Install and build -------------------------------------------------------
-# Clone, install, and compile all core packages
-git clone https://github.com/chavithra/rawbox-workspace.git
-cd rawbox-workspace
-npm install
-npm run build:all
+| Command | Answers |
+| --- | --- |
+| `rawbox-cli runs list <workspace>` | What ran, what is alive, what crashed |
+| `rawbox-cli store list <workspace>` | What state the system holds right now |
+| `rawbox-cli workspace status <workspace>` | One live snapshot of every workflow and its storage |
 
-# Link the core packages globally so projects can resolve them locally
-npm link ./packages/rawbox-plugin ./packages/rawbox-runner ./packages/rawbox-cli ./packages/rawbox-store ./packages/rawbox-plugin-default
-
-# --- Scaffold a workspace with a runnable example workflow -------------------
-npx rawbox-cli workspace create --name my-workspace
-
-# --- Verify and run the generated example ------------------------------------
-npx rawbox-cli workspace verify workspaces/my-workspace/workspace.yaml
-npx rawbox-cli workflow verify workspaces/my-workspace/workflows/example.workflow.yaml --workspace workspaces/my-workspace/workspace.yaml
-
-# Execute — waits 500 ms, persists the timestamp, and logs every state transition
-npx rawbox-cli workflow run workspaces/my-workspace/workspace.yaml workspaces/my-workspace/workflows/example.workflow.yaml ./run-logs.txt
-
-# Display state transitions
-cat ./run-logs.txt
-```
-
-### 3.1. Example YAML Configurations
-
-Once generated, your workspace and workflow configuration files will look like this:
-
-#### `workspace.yaml`
-```yaml
-name: my-workspace
-workflowPathList:
-  - ./workflows/example.workflow.yaml
-```
-
-#### `workflows/example.workflow.yaml`
-```yaml
-name: example
-pluginPathList:
-  - ../../packages/rawbox-plugin-default
-seedData:
-  - key: sleep_ms
-    strategy:
-      name: lmdb-kv
-      valueSizeMax: 2022
-    value: 500
-stepList:
-  - label: sleep-step
-    definitionLocation:
-      contractRegistryHash: "92837f61c312..."
-      definitionPath: ./time/sleep.definition.js
-    storageLocation:
-      input:
-        ms:
-          key: sleep_ms
-          strategy:
-            name: lmdb-kv
-            valueSizeMax: 2022
-      output:
-        timestamp:
-          key: sleep_done_at
-          strategy:
-            name: lmdb-kv
-            valueSizeMax: 2022
-      error:
-        message:
-          key: sleep_error
-          strategy:
-            name: lmdb-kv
-            valueSizeMax: 2022
-```
+Full tour — including merged multi-workflow logs, `store get`/`watch`, retention, and
+OpenTelemetry export: [cli README §1.4–1.6](packages/rawbox-cli/README.md#14-observability-the-run-registry-runs).
 
 ---
 
-## 4. Your Own Automation Monorepo (Build with Code Assist)
+## 6. Your Own Project
 
-Real automations live in a standalone project monorepo where built-in skill files allow AI code assistants to build plugins and workflows for you.
-
-### 4.1. Scaffold the Monorepo
+For real automations, scaffold a project monorepo — it separates your **code**
+(`packages/`, your plugins) from your **config** (`workspaces/`, the YAML), and ships
+skill files that teach AI code assistants how to extend it:
 
 ```bash
-npx rawbox-cli project create --name my-rawbox-project
+rawbox-cli project create --name my-rawbox-project
 cd my-rawbox-project
 npm run build:all
 ```
 
-This generates an npm-workspaces monorepo with a working example plugin and a
-clear code/config split:
-
-```text
-my-rawbox-project/
-├── package.json                     # npm workspaces root (build:all / test:all)
-├── tsconfig.base.json               # Shared TypeScript configuration
-├── .agents/skills/                  # 🤖 Skill files that teach code assistants this project
-│   ├── rawbox-plugin-creation/      #    …how to scaffold a new plugin package
-│   ├── rawbox-operation-creation/   #    …how to add + test an operation
-│   ├── rawbox-workflow-creation/    #    …how to wire and run workflows
-│   └── rawbox-project-creation/     #    …how this whole layout fits together
-├── packages/                        # 📦 CODE: TypeScript packages
-│   ├── rawbox-plugin-example/       #    Example plugin: registry + hello-world op + test
-│   └── rawbox-shared-utils/         #    Shared helpers importable by plugins
-└── workspaces/                      # ⚙️ CONFIG: declarative YAML only
-    └── workspace-example/            #    Example workspace: workspace.yaml + workflows/ + logs/ + db/
-```
-
-### 4.2. Build with a Code Assistant
-
-Ask your AI assistant to build what you need; the bundled skills guide it on how to create, test, and verify operations and workflows:
-
-| You ask for… | The assistant follows | What it produces |
-| :--- | :--- | :--- |
-| "Create a plugin for the Kraken API" | [rawbox-plugin-creation](.agents/skills/rawbox-plugin-creation/SKILL.md) | A `packages/rawbox-plugin-*` package with registry, exports, and test setup |
-| "Add a fetch-ticker operation to it" | [rawbox-operation-creation](.agents/skills/rawbox-operation-creation/SKILL.md) | Contract in `contract-registry.ts` + typed handler + Vitest tests |
-| "Wire a workflow that polls it every 5 s" | [rawbox-workflow-creation](.agents/skills/rawbox-workflow-creation/SKILL.md) | Workspace/workflow YAML with storage keys mapped and registry hashes computed |
-
-Two features keep the assistant's output safe and minimal:
-
-* **Schema-enforced contracts** — TypeBox schemas validate inputs, outputs, and errors at runtime so failures occur in testing (`npm run test:all`) rather than production.
-* **Built-ins first** — The assistant is guided to reuse existing control-flow and utilities in [rawbox-plugin-default](packages/rawbox-plugin-default/README.md) to minimize custom code.
-
-### 4.3. The Development Loop
-
-Whether changes come from the assistant or your own editor, the loop is:
+Ask your assistant for a plugin, an operation, or a workflow — the bundled skills in
+`.agents/skills/` guide it through creating, testing and verifying each one. The
+development loop is always the same:
 
 ```bash
-npm run build:all                       # compile plugins (registry hash = compiled contracts)
-npm run test:all                        # Vitest validates handlers against their schemas
-npx rawbox-cli registry hash packages/<plugin>/src/contract-registry.ts   # rebind workflows after contract changes
-npx rawbox-cli workflow verify <workflow.yaml> --workspace <workspace.yaml>
-npx rawbox-cli workflow run <workspace.yaml> <workflow.yaml> ./run-logs.txt
+npm run build:all && npm run test:all
+rawbox-cli workflow verify <workflow.yaml>
+rawbox-cli run <workflow.yaml>
 ```
-
-Plugins are discovered automatically if they use the `rawbox-plugin-*` prefix, include the `"rawbox-plugin"` keyword in `package.json`, and export a `./contract-registry` subpath (see [Plugin Discovery](packages/rawbox-plugin/README.md)).
 
 ---
 
-## 5. Built-in Definitions
+## 7. License
 
-`rawbox-plugin-default` provides standard definitions to build workflows without writing custom code:
+BSD 3-Clause — see [LICENSE](LICENSE).
 
-* **Control-flow**: `jump`, `branch` (if/else), `switch` (multi-way dispatch), `loop-gate`, and `halt` (early exit).
-* **Timing**: `sleep` and `workflow-throttle`.
-* **Data plumbing**: `echo`, `compare`, `logic`, `increment`, and `assert`.
-* **Observability**: `log` writes structured JSON lines to local logs.
-
-Implement loops using the built-in `increment` and `loop-gate` steps (see the [Canonical Loop Pattern](packages/rawbox-plugin-default/README.md#3-canonical-loop-pattern)).
+Every package in this monorepo ships under the same license.

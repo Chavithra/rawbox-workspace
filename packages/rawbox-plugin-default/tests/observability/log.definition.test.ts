@@ -41,7 +41,7 @@ describe('log.definition', () => {
     const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const handler = logDefinition.validatedHandler;
 
-    const c: any = {};
+    const c: Record<string, unknown> = {};
     c.self = c;
 
     const result = await handler({ level: 'warn', message: 'circular', data: c });

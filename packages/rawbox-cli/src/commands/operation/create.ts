@@ -2,23 +2,30 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { IndentationText, Project, SyntaxKind } from 'ts-morph';
+import {
+  IndentationText,
+  Project,
+  SyntaxKind,
+  type CodeBlockWriter,
+  type ObjectLiteralExpression,
+  type PropertyAssignment,
+  type VariableDeclaration,
+} from 'ts-morph';
 import { copyTemplateFile } from '../../utils/template.js';
+import { getErrorMessage } from '../../utils/error.js';
 
-function getObjectLiteral(node: any): any {
-  if (!node) return null;
+function getObjectLiteral(
+  node: VariableDeclaration | PropertyAssignment,
+): ObjectLiteralExpression | null {
   const initializer = node.getInitializer();
   if (!initializer) return null;
 
-  if (initializer.getKind() === SyntaxKind.AsExpression) {
-    const expr = initializer.getExpression();
-    if (expr && expr.getKind() === SyntaxKind.ObjectLiteralExpression) {
-      return expr;
-    }
-  } else if (initializer.getKind() === SyntaxKind.ObjectLiteralExpression) {
-    return initializer;
+  // Unwrap `{ ... } as const` before looking for the object literal.
+  const asExpression = initializer.asKind(SyntaxKind.AsExpression);
+  if (asExpression) {
+    return asExpression.getExpression().asKind(SyntaxKind.ObjectLiteralExpression) ?? null;
   }
-  return null;
+  return initializer.asKind(SyntaxKind.ObjectLiteralExpression) ?? null;
 }
 
 function addOperationSignatureToRegistryFile(
@@ -33,9 +40,8 @@ function addOperationSignatureToRegistryFile(
   });
   const sourceFile = project.addSourceFileAtPath(registryPath);
 
-  // Search for the object literal where contracts are registered
   const variableDecs = sourceFile.getVariableDeclarations();
-  let targetObjectLiteral: any = null;
+  let targetObjectLiteral: ObjectLiteralExpression | null = null;
 
   for (const dec of variableDecs) {
     const name = dec.getName();
@@ -63,16 +69,14 @@ function addOperationSignatureToRegistryFile(
   }
 
   if (targetObjectLiteral) {
-    // Check if the property already exists to prevent duplicate key errors
     const existingProps = targetObjectLiteral.getProperties();
     const keyString = `"${definitionKeyPath}"`;
     const keyAltString = `'${definitionKeyPath}'`;
-    const alreadyExists = existingProps.some((prop: any) => {
-      if (prop.getKind() === SyntaxKind.PropertyAssignment) {
-        const nameText = prop.getName();
-        return nameText === keyString || nameText === keyAltString || nameText === definitionKeyPath;
-      }
-      return false;
+    const alreadyExists = existingProps.some((prop) => {
+      const assignment = prop.asKind(SyntaxKind.PropertyAssignment);
+      if (!assignment) return false;
+      const nameText = assignment.getName();
+      return nameText === keyString || nameText === keyAltString || nameText === definitionKeyPath;
     });
 
     if (alreadyExists) {
@@ -81,7 +85,7 @@ function addOperationSignatureToRegistryFile(
 
     targetObjectLiteral.addPropertyAssignment({
       name: keyString,
-      initializer: (writer: any) => {
+      initializer: (writer: CodeBlockWriter) => {
         writer
           .write('{')
           .writeLine('type: "operation",')
@@ -104,7 +108,6 @@ function addOperationSignatureToRegistryFile(
 export async function createOperation(options: { name?: string | undefined } = {}) {
   p.intro(pc.cyan('Create a new Operation'));
 
-  // Locate the registry file (search in src/ or current folder)
   let registryPath = '';
   const possiblePaths = [
     path.join(process.cwd(), 'src', 'contract-registry.ts'),
@@ -120,7 +123,9 @@ export async function createOperation(options: { name?: string | undefined } = {
         registryPath = p;
         break;
       }
-    } catch {}
+    } catch {
+      // Candidate path is missing or unreadable — try the next one.
+    }
   }
 
   if (!registryPath) {
@@ -140,7 +145,7 @@ export async function createOperation(options: { name?: string | undefined } = {
               message: 'What is the name of your new operation?',
               placeholder: 'my-operation',
               validate: (val) => {
-                if (!val.trim()) return 'Operation name is required';
+                if (!val?.trim()) return 'Operation name is required';
               },
             }),
     },
@@ -156,7 +161,6 @@ export async function createOperation(options: { name?: string | undefined } = {
   const camelCaseName = operationName.replace(/-([a-z])/g, (g) => g[1]!.toUpperCase());
   const registryDir = path.dirname(registryPath);
   
-  // Check if operations/ subdirectory exists (like in a plugin layout)
   const hasOperationsSubdir = await fs.stat(path.join(registryDir, 'operations'))
     .then((s) => s.isDirectory())
     .catch(() => false);
@@ -174,7 +178,6 @@ export async function createOperation(options: { name?: string | undefined } = {
     const isPluginRegistry = registryPath.endsWith('contract-registry.ts');
     const registryImportPath = isPluginRegistry ? '../contract-registry.js' : './contracts-registry.js';
     
-    // Copy definition template
     await copyTemplateFile('operation/operation.definition.ts.ejs', definitionFile, {
       camelCaseName,
       operationName,
@@ -195,13 +198,13 @@ export async function createOperation(options: { name?: string | undefined } = {
       p.log.warn(`Signature for ${definitionKeyPath} was already present in registry.`);
       p.outro(pc.green(`✅ Operation file created successfully.`));
     } else {
-      s.stop('Failed to register.');
+      s.error('Failed to register.');
       p.log.error('Could not find operations record variable inside registry file to append signature.');
       p.outro(pc.yellow('⚠ Operation file created, but not registered.'));
     }
-  } catch (error: any) {
-    s.stop('Failed.');
-    p.log.error(pc.red(`Error: ${error.message}`));
+  } catch (error) {
+    s.error('Failed.');
+    p.log.error(pc.red(`Error: ${getErrorMessage(error)}`));
     process.exit(1);
   }
 }

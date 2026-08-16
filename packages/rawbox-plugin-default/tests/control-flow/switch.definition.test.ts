@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import switchDefinition from '../../src/control-flow/definitions/switch.definition.js';
+import switchDefinition from '../../src/control-flow/switch.definition.js';
 
 describe('switch.definition', () => {
   it('should jump to the mapped label for a matching case', async () => {

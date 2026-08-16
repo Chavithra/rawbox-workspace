@@ -1,10 +1,11 @@
-import { type Static, Type, type TObject } from 'typebox';
+import { type Static, Type } from 'typebox';
 import type { Result } from 'neverthrow';
 
 import {
   type Contract,
   ContractRegistryPath,
   DefinitionPath,
+  type ObjectSchemaLike,
 } from '../contracts/contract-registry-types.js';
 
 export const DefinitionLocation = Type.Object({
@@ -15,34 +16,34 @@ export const DefinitionLocation = Type.Object({
 export type DefinitionLocation = Static<typeof DefinitionLocation>;
 
 export type LogicResult<
-  TError extends TObject,
-  TOutput extends TObject,
+  TError extends ObjectSchemaLike,
+  TOutput extends ObjectSchemaLike,
 > = Result<Static<TOutput>, Static<TError>>;
 
 export type ValidationError = Error;
 
 export type ValidatedResult<
-  TError extends TObject,
-  TOutput extends TObject,
+  TError extends ObjectSchemaLike,
+  TOutput extends ObjectSchemaLike,
 > = Result<LogicResult<TError, TOutput>, ValidationError>;
 
 export type Handler<
-  TError extends TObject,
-  TInput extends TObject,
-  TOutput extends TObject,
+  TError extends ObjectSchemaLike,
+  TInput extends ObjectSchemaLike,
+  TOutput extends ObjectSchemaLike,
 > = (input: Static<TInput>) => Promise<LogicResult<TError, TOutput>>;
 
 export type ValidatedHandler<
-  TError extends TObject,
-  TInput extends TObject,
-  TOutput extends TObject,
+  TError extends ObjectSchemaLike,
+  TInput extends ObjectSchemaLike,
+  TOutput extends ObjectSchemaLike,
 > = (input: Static<TInput>) => Promise<ValidatedResult<TError, TOutput>>;
 
 export interface Definition<
   TContract extends Contract,
-  TError extends TObject = TObject,
-  TInput extends TObject = TObject,
-  TOutput extends TObject = TObject,
+  TError extends ObjectSchemaLike = ObjectSchemaLike,
+  TInput extends ObjectSchemaLike = ObjectSchemaLike,
+  TOutput extends ObjectSchemaLike = ObjectSchemaLike,
 > {
   readonly contract: TContract;
   readonly handler: Handler<TError, TInput, TOutput>;

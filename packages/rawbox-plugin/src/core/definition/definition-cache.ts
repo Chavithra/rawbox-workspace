@@ -18,7 +18,12 @@ export function createLoadDefinition<
   TContract extends Contract,
   TDefinition extends Definition<TContract>,
 >(
-  contractGuard: (contract: object) => contract is TContract,
+  // Used purely as a boolean gate below; the loaded module is narrowed by the
+  // explicit `as TDefinition` cast, never by this predicate. Typing it as a
+  // `contract is TContract` predicate coupled the guard's asserted type to
+  // TContract without buying any narrowing, which broke as soon as the two
+  // stopped being spelled identically.
+  contractGuard: (contract: object) => boolean,
 ): DefinitionLoader<TContract, TDefinition> {
   async function loadDefinitionFromAbsolutePath(
     definitionAbsolutePath: DefinitionPath,

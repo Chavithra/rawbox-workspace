@@ -4,9 +4,38 @@ import path from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { copyTemplateFile } from '../../utils/template.js';
+import { getErrorMessage } from '../../utils/error.js';
+import { resolvePluginSdkFloorVersion } from '../../utils/plugin-sdk-version.js';
+
+/**
+ * Rawbox plugins are discovered by name, so the convention is enforced up front:
+ * a plugin scaffolded under any other name would never be found by the runner.
+ * Matches `rawbox-plugin-*`, optionally inside any scope.
+ */
+function validatePluginName(value: string | undefined): string | undefined {
+  if (!value?.trim()) return 'Plugin name is required';
+
+  const name = value.trim();
+  const matchesConvention =
+    name.startsWith('rawbox-plugin-') || /^@[^/]+\/rawbox-plugin-/.test(name);
+
+  if (!matchesConvention) {
+    return `Plugin name must start with 'rawbox-plugin-' (e.g. rawbox-plugin-custom) or '@scope/rawbox-plugin-' (e.g. @acme/rawbox-plugin-custom); got '${name}'`;
+  }
+  return undefined;
+}
 
 export async function createPlugin(options: { name?: string | undefined; install?: boolean | undefined } = {}) {
   p.intro(pc.cyan('Create a new Rawbox Plugin'));
+
+  // Fail fast on a bad --name rather than scaffolding an undiscoverable plugin.
+  if (options.name !== undefined) {
+    const invalid = validatePluginName(options.name);
+    if (invalid) {
+      p.cancel(invalid);
+      process.exit(1);
+    }
+  }
 
   const answers = await p.group(
     {
@@ -16,9 +45,7 @@ export async function createPlugin(options: { name?: string | undefined; install
           : p.text({
               message: 'What is the name of your plugin?',
               placeholder: 'rawbox-plugin-custom',
-              validate: (val) => {
-                if (!val.trim()) return 'Plugin name is required';
-              },
+              validate: validatePluginName,
             }),
       installDeps: async () =>
         options.install !== undefined
@@ -44,15 +71,13 @@ export async function createPlugin(options: { name?: string | undefined; install
   s.start(`Generating plugin files in ${pc.green(targetDir)}...`);
 
   try {
-    // Scaffold plugin root files
-    await copyTemplateFile('plugin/package.json.ejs', path.join(targetDir, 'package.json'), { pluginName });
+    const pluginSdkVersion = await resolvePluginSdkFloorVersion();
+    await copyTemplateFile('plugin/package.json.ejs', path.join(targetDir, 'package.json'), { pluginName, pluginSdkVersion });
     await copyTemplateFile('plugin/tsconfig.json.ejs', path.join(targetDir, 'tsconfig.json'));
     
-    // Scaffold plugin src files
     await copyTemplateFile('plugin/src/contract-registry.ts.ejs', path.join(targetDir, 'src', 'contract-registry.ts'));
     await copyTemplateFile('plugin/src/operations/hello-world.definition.ts.ejs', path.join(targetDir, 'src', 'operations', 'hello-world.definition.ts'));
     
-    // Scaffold test files
     await copyTemplateFile('plugin/tests/hello-world.test.ts.ejs', path.join(targetDir, 'tests', 'hello-world.test.ts'));
 
     s.stop('Plugin files generated successfully.');
@@ -65,7 +90,9 @@ export async function createPlugin(options: { name?: string | undefined; install
         if (pkg.workspaces && Array.isArray(pkg.workspaces)) {
           isMonorepo = true;
         }
-      } catch {}
+      } catch {
+        // No readable package.json here — treat as a standalone (non-monorepo) target.
+      }
       const cwd = isMonorepo ? process.cwd() : targetDir;
       
       const installResult = spawnSync('npm', ['install'], {
@@ -79,9 +106,9 @@ export async function createPlugin(options: { name?: string | undefined; install
     }
 
     p.outro(pc.green('✅ Plugin generation complete!'));
-  } catch (error: any) {
-    s.stop('Generation failed.');
-    p.log.error(pc.red(`Error generating plugin: ${error.message}`));
+  } catch (error) {
+    s.error('Generation failed.');
+    p.log.error(pc.red(`Error generating plugin: ${getErrorMessage(error)}`));
     process.exit(1);
   }
 }

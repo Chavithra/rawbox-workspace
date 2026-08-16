@@ -1,15 +1,19 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Type } from 'typebox';
-import crypto from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { createActor } from 'xstate';
-import { BoxStoreLmdb } from 'rawbox-store/box-store-lmdb';
-import { ContractRegistryCache } from 'rawbox-plugin/core';
+import { createActor, type StateValue } from 'xstate';
+import { BoxStoreLmdb } from '@rawbox/store/box-store-lmdb';
+import { ContractRegistryCache } from '@rawbox/plugin/core';
 import { selectFunc as selectStepFunc } from '../src/machine/actors/select-actor.js';
+import {
+  StepTimeoutError,
+  runFunc as runStepFunc,
+} from '../src/machine/actors/run-actor.js';
 import { createWorkflowMachine } from '../src/machine/machine-instance.js';
 import { contractRegistry } from '../../rawbox-plugin-default/dist/contract-registry.js';
 import { validateSeedData } from '../src/workflow/validation.js';
+import type { ResolvedWorkflow } from '../src/workflow/workflow-types.js';
 
 describe('selectStepFunc', () => {
 
@@ -43,8 +47,7 @@ describe('selectStepFunc', () => {
         contractRegistryHash: mockRegistryHash,
         definitionPath: './sum.js',
       },
-      inputBoxLocationRecord: {},
-      outputBoxLocationRecord: {},
+      storageLocation: { input: {}, output: {}, error: {} },
       label: 'step-0',
     },
     {
@@ -52,8 +55,7 @@ describe('selectStepFunc', () => {
         contractRegistryHash: mockRegistryHash,
         definitionPath: './jump.js',
       },
-      inputBoxLocationRecord: {},
-      outputBoxLocationRecord: {},
+      storageLocation: { input: {}, output: {}, error: {} },
       label: 'step-1',
     },
   ];
@@ -64,6 +66,7 @@ describe('selectStepFunc', () => {
 
   const workflow = {
     name: 'simple',
+    pluginPathList: [],
     stepList,
   };
 
@@ -203,6 +206,56 @@ describe('selectStepFunc', () => {
     }
   });
 
+  it('should fail the run with the reason when control-flow returns ReservedLabel.FAIL', async () => {
+    const result = await selectStepFunc({
+      input: {
+        contractRegistryCache,
+        execution: {
+          doneStep: {
+            index: 1,
+            outputRecord: {
+              label: '__FAIL__',
+              reason: 'the symbol is ACTIVE with no grid_state',
+            },
+          },
+          todoStep: null,
+        },
+        workflow,
+      },
+    });
+
+    // An `err` here is the deliberate reuse of the path a failed step actor
+    // takes: it becomes `context.error`, then an error `run.end`.
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toBe('the symbol is ACTIVE with no grid_state');
+    }
+  });
+
+  it('should name the step when ReservedLabel.FAIL carries no reason', async () => {
+    for (const outputRecord of [
+      { label: '__FAIL__' },
+      // An empty reason counts as none: an empty `Error.message` would be
+      // reported as the bare word "Error" by the machine's error assigner.
+      { label: '__FAIL__', reason: '' },
+    ]) {
+      const result = await selectStepFunc({
+        input: {
+          contractRegistryCache,
+          execution: { doneStep: { index: 1, outputRecord }, todoStep: null },
+          workflow,
+        },
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toBe(
+          'Step 1 "step-1" ended the run as a failure (__FAIL__ with no reason given).',
+        );
+      }
+    }
+  });
+
   it('should jump to index 0 when control-flow returns ReservedLabel.START', async () => {
     const result = await selectStepFunc({
       input: {
@@ -271,14 +324,14 @@ describe('selectStepFunc', () => {
           contractRegistryHash: registryWithoutSumHash,
           definitionPath: './sum.js',
         },
-        inputBoxLocationRecord: {},
-        outputBoxLocationRecord: {},
+        storageLocation: { input: {}, output: {}, error: {} },
         label: 'step-0',
       },
     ];
 
     const badWorkflow = {
       name: 'simple',
+      pluginPathList: [],
       stepList: badStepList,
     };
 
@@ -299,6 +352,80 @@ describe('selectStepFunc', () => {
     if (result.isErr()) {
       expect(result.error.message).toContain('Contract not found in registry: ./sum.js');
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `runStepFunc` — the enforcement half of bounded steps, at the actor itself.
+//
+// Driven directly, the same way `selectStepFunc` is above: the machine, the
+// producer and the event stream are covered by `tests/timeout.test.ts`, so what
+// is left to pin here is the actor's own contract — which exit an expired bound
+// takes, and what the failure it returns carries. Against the *real* built
+// `time/sleep`, because the bound wraps a real dynamic `import()` and a real
+// `validatedHandler`, neither of which a stub would exercise.
+// ---------------------------------------------------------------------------
+
+describe('runStepFunc — a step\'s timeoutMs', () => {
+  const registryHash = ContractRegistryCache.computeHash(contractRegistry);
+  const contractRegistryCache = new ContractRegistryCache(
+    new Map([[registryHash, contractRegistry]]),
+  );
+
+  /** A one-step workflow whose only step sleeps, bounded or not. */
+  const sleepWorkflow = (timeoutMs?: number): ResolvedWorkflow =>
+    ({
+      name: 'bounded',
+      pluginPathList: [],
+      stepList: [
+        {
+          definitionLocation: {
+            contractRegistryHash: registryHash,
+            definitionPath: './time/sleep.definition.js',
+          },
+          storageLocation: { input: {}, output: {}, error: {} },
+          label: 'slow-step',
+          // Absent, not `undefined`: the resolved model has two states, and a
+          // present key is the whole of "bounded".
+          ...(timeoutMs === undefined ? {} : { timeoutMs }),
+        },
+      ],
+    }) as unknown as ResolvedWorkflow;
+
+  const runSleep = async (ms: number, timeoutMs?: number) =>
+    await runStepFunc({
+      input: {
+        contractRegistryCache,
+        workflow: sleepWorkflow(timeoutMs),
+        execution: { todoStep: { index: 0, inputRecord: { ms } }, doneStep: null },
+      },
+    });
+
+  it('resolves err(StepTimeoutError) long before the handler would return', async () => {
+    const startedAtMs = Date.now();
+    const result = await runSleep(60_000, 50);
+    const elapsedMs = Date.now() - startedAtMs;
+
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error).toBeInstanceOf(StepTimeoutError);
+    expect((error as StepTimeoutError).timeoutMs).toBe(50);
+    expect(error.message).toBe(
+      'Step 0 "slow-step" timed out after 50 ms (the handler did not return).',
+    );
+
+    // The point of the bound: the wait is over in ~50ms, not in 60s. The
+    // handler's own timer is still pending — a bound stops the *waiting*, not
+    // the work (see `run-actor.ts`, "Known limitations").
+    expect(elapsedMs).toBeLessThan(1_000);
+  });
+
+  it('leaves an unbounded step alone', async () => {
+    const result = await runSleep(10);
+
+    expect(result.isOk(), `run failed: ${result.isErr() ? result.error.message : ''}`).toBe(true);
+    expect(result._unsafeUnwrap().doneStep).toMatchObject({ index: 0 });
+    expect(result._unsafeUnwrap().doneStep?.outputRecord).toHaveProperty('timestamp');
   });
 });
 
@@ -335,7 +462,7 @@ describe('Workflow State Machine Integration', () => {
       {
         definitionLocation: {
           contractRegistryHash: registryHash,
-          definitionPath: './control-flow/definitions/jump.definition.js',
+          definitionPath: './control-flow/jump.definition.js',
         },
         storageLocation: {
           input: {},
@@ -383,7 +510,7 @@ describe('Workflow State Machine Integration', () => {
     const machine = createWorkflowMachine(boxStoreLmdb, contractRegistryCache);
     const actor = createActor(machine, { input });
 
-    const states: any[] = [];
+    const states: StateValue[] = [];
     actor.subscribe((state) => {
       states.push(state.value);
     });
@@ -393,7 +520,6 @@ describe('Workflow State Machine Integration', () => {
     // Wait for state machine to start and run through to final state
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // Verify that the starting and selecting states were entered, and we exited cleanly
     expect(states).toContainEqual({ running: 'starting' });
     expect(states).toContainEqual({ running: 'selecting' });
     expect(states).toContainEqual('stopping');
@@ -406,7 +532,7 @@ describe('Workflow State Machine Integration', () => {
     const workflow = {
       name: 'invalid-workflow',
       stepList: [],
-    } as any;
+    } as unknown as ResolvedWorkflow;
 
     const contractRegistryCache = new ContractRegistryCache(new Map());
 
@@ -427,7 +553,7 @@ describe('Workflow State Machine Integration', () => {
     const machine = createWorkflowMachine(boxStoreLmdb, contractRegistryCache);
     const actor = createActor(machine, { input });
 
-    const states: any[] = [];
+    const states: StateValue[] = [];
     actor.subscribe((state) => {
       states.push(state.value);
     });
@@ -454,7 +580,7 @@ describe('Workflow State Machine Integration', () => {
           input: {},
           output: {
             result: {
-              key: 100,
+              key: 'result-key',
               workflow: 'other-workflow', // mismatch workflow name (expected 'simple')
               workspace: 'test-workspace',
               strategy: { name: 'lmdb-kv' as const, valueSizeMax: 100 },
@@ -510,7 +636,7 @@ describe('Workflow State Machine Integration', () => {
     const machine = createWorkflowMachine(boxStoreLmdb, contractRegistryCache);
     const actor = createActor(machine, { input });
 
-    const states: any[] = [];
+    const states: StateValue[] = [];
     actor.subscribe((state) => {
       states.push(state.value);
     });
@@ -536,7 +662,7 @@ describe('Workflow State Machine Integration', () => {
         storageLocation: {
           input: {
             source: {
-              key: 100,
+              key: 'source-key',
               workflow: 'simple',
               workspace: 'other-workspace', // mismatch workspace name (expected 'test-workspace')
               strategy: { name: 'lmdb-kv' as const, valueSizeMax: 100 },
@@ -593,7 +719,7 @@ describe('Workflow State Machine Integration', () => {
     const machine = createWorkflowMachine(boxStoreLmdb, contractRegistryCache);
     const actor = createActor(machine, { input });
 
-    const states: any[] = [];
+    const states: StateValue[] = [];
     actor.subscribe((state) => {
       states.push(state.value);
     });
@@ -669,7 +795,7 @@ describe('Workflow State Machine Integration', () => {
     const machine = createWorkflowMachine(boxStoreLmdb, contractRegistryCache);
     const actor = createActor(machine, { input });
 
-    const states: any[] = [];
+    const states: StateValue[] = [];
     actor.subscribe((state) => {
       states.push(state.value);
     });
@@ -746,7 +872,7 @@ describe('Workflow State Machine Integration', () => {
         ],
       };
 
-      const result = validateSeedData(workflow as any, contractRegistryCache);
+      const result = validateSeedData(workflow as unknown as ResolvedWorkflow, contractRegistryCache);
       expect(result.isOk()).toBe(true);
     });
 
@@ -760,7 +886,7 @@ describe('Workflow State Machine Integration', () => {
         ],
       };
 
-      const result = validateSeedData(workflow as any, contractRegistryCache);
+      const result = validateSeedData(workflow as unknown as ResolvedWorkflow, contractRegistryCache);
       expect(result.isErr()).toBe(true);
       expect(result._unsafeUnwrapErr().message).toContain('Seed validation failed for key "key-a"');
     });
@@ -775,7 +901,7 @@ describe('Workflow State Machine Integration', () => {
         ],
       };
 
-      const result = validateSeedData(workflow as any, contractRegistryCache);
+      const result = validateSeedData(workflow as unknown as ResolvedWorkflow, contractRegistryCache);
       expect(result.isOk()).toBe(true);
     });
   });

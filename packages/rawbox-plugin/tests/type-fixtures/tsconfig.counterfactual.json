@@ -1,0 +1,19 @@
+{
+  // Same options as tsconfig.positive.json; separate project because this one
+  // is EXPECTED to fail. See counterfactual/strict-tobject.ts.
+  "compilerOptions": {
+    "module": "nodenext",
+    "target": "esnext",
+    "types": ["node"],
+    "noEmit": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true
+  },
+  "include": ["counterfactual/**/*.ts"]
+}
