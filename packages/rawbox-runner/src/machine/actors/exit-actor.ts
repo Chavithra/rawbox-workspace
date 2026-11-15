@@ -1,8 +1,7 @@
 import { fromPromise } from 'xstate';
 import { ok, err, type Result } from 'neverthrow';
 
-import type { BoxStoreLmdb } from '@rawbox/store/box-store-lmdb';
-import { buildBoxRecord, type Box } from '@rawbox/store';
+import { buildBoxRecord, type Box, type BoxStore } from '@rawbox/store';
 
 import type { MachineExecution } from '../machine-types.js';
 import type { ResolvedStep } from '../../workflow/step-types.js';
@@ -61,10 +60,10 @@ export const getOutputBoxRecord = (
 };
 
 export const exitFunc = async ({
-  input: { boxStoreLmdb, workflow, workspace, execution },
+  input: { boxStore, workflow, workspace, execution },
 }: {
   input: {
-    boxStoreLmdb: BoxStoreLmdb;
+    boxStore: BoxStore;
     workflow: ResolvedWorkflow;
     workspace: string;
     execution: MachineExecution;
@@ -82,19 +81,12 @@ export const exitFunc = async ({
   }
   const outputBoxRecord = outputBoxRecordResult.value;
 
-  // Awaited at the boundary only: the callback stays synchronous
-  // (`putSync`), because `BoxStoreLmdb.transaction` runs it inside
-  // `transactionSync` — see that method's doc comment for why an `await`
-  // inside would commit nothing and pin an MVCC snapshot.
-  const writeResult = await boxStoreLmdb.transaction((txStore) => {
-    for (const box of Object.values(outputBoxRecord)) {
-      const putResult = txStore.putSync(box);
-      if (putResult.isErr()) {
-        return err(putResult.error);
-      }
-    }
+  const outputBoxes = Object.values(outputBoxRecord);
+  if (outputBoxes.length === 0) {
     return ok(undefined);
-  });
+  }
+
+  const writeResult = await boxStore.transact({ puts: outputBoxes });
 
   if (writeResult.isErr()) {
     return err(new Error(writeResult.error));

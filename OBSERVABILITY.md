@@ -210,7 +210,7 @@ hidden by being mistaken for one.
 
 `depth` reports `{ used, capacity }`. `capacity` is what the strategy declares it can hold, not
 its declared ceiling restated: an `lmdb-fifo` ring reserves one slot and reports
-`queueSizeMax - 1`; a `redis-fifo` list reserves none and reports `queueSizeMax`.
+`queueSizeMax - 1`, whereas `pg-fifo` reserves no slot and reports `queueSizeMax`.
 
 ### 3.3. The out-of-process observer
 
@@ -227,9 +227,8 @@ parked observer makes a busy store grow without bound — in another process. Th
 is therefore synchronous throughout and returns fully materialised data, never a live iterator,
 and it resets its shared read transaction after every call.
 
-A backend that cannot offer a point-in-time snapshot MUST say so rather than imply parity: a
-Redis-backed observation is a `SCAN` plus per-key reads, so a multi-key listing may be torn,
-may repeat a key, and may miss one written during the sweep. It MUST use `SCAN`, never `KEYS`.
+A backend that cannot offer a point-in-time snapshot MUST say so rather than imply parity with
+one that can.
 
 ### 3.5. Polling
 

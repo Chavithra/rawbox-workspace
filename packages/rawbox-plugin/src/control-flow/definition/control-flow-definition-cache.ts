@@ -1,3 +1,5 @@
+import { err } from 'neverthrow';
+
 import { type ControlFlowContract } from '../contract/control-flow-contract-types.js';
 import { controlFlowContractGuard } from '../contract/control-flow-contract-utils.js';
 import { ControlFlowDefinition, OutputSchema } from './control-flow-definition.js';
@@ -79,8 +81,13 @@ export class ControlFlowDynamicCaller<
 
       return await validatedHandler(input);
     }
-    throw new Error(
-      `Failed to load control-flow definition from path "${definitionPath}": ${resultOfLoadControlFlowDefinition.error}`,
+    // An `Err`, never a throw: the signature promises a `ValidatedResult`, whose
+    // error channel is an `Error`, and a definition that cannot be loaded is
+    // exactly what that channel is for.
+    return err(
+      new Error(
+        `Failed to load control-flow definition from path "${definitionPath}": ${resultOfLoadControlFlowDefinition.error}`,
+      ),
     );
   }
 }

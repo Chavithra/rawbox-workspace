@@ -1,8 +1,12 @@
 import { fromPromise } from 'xstate';
 import { ok, err, type Result } from 'neverthrow';
 
-import type { BoxStoreLmdb } from '@rawbox/store/box-store-lmdb';
-import { type Box, type BoxLocation, type ReadBoxLocation } from '@rawbox/store';
+import {
+  type Box,
+  type BoxLocation,
+  type BoxStore,
+  type ReadBoxLocation,
+} from '@rawbox/store';
 
 import type { MachineExecution } from '../machine-types.js';
 import type { ResolvedStep } from '../../workflow/step-types.js';
@@ -29,58 +33,38 @@ export const getInputBoxLocationRecord = (
 
 /**
  * Writes the finished step's outputs and reads the next step's inputs in ONE
- * transaction. Both halves in one commit is the point: a crash between them
- * would leave a step's outputs visible while the successor never observed
- * them.
- *
- * `async` only at the boundary. `BoxStoreLmdb.transaction` resolves a Promise
- * but still runs its callback synchronously inside `transactionSync`, so the
- * callback below stays synchronous — `putSync`/`getSync`, never `put`/`get`.
- * An `await` in there would both commit an empty transaction and pin an MVCC
- * snapshot across a suspension; see the doc comment on
- * `BoxStoreLmdb.transaction` (`rawbox-store/src/box-store/box-store-lmdb.ts`)
- * for why neither is recoverable. The `await` belongs here, outside.
+ * atomic batch via `BoxStore.transact`. Both halves in one commit is the point:
+ * a crash between them would leave a step's outputs visible while the successor
+ * never observed them.
  */
 export const syncData = async (
-  boxStoreLmdb: BoxStoreLmdb,
+  boxStore: BoxStore,
   inputBoxLocationRecord: Record<string, ReadBoxLocation>,
   outputBoxRecord: Record<string, Box<unknown>>,
   workflowName: string,
   workspaceName: string,
 ): Promise<Result<Record<string, unknown>, string>> => {
-  return boxStoreLmdb.transaction((txStore) => {
-    for (const box of Object.values(outputBoxRecord)) {
-      const putResult = txStore.putSync(box);
-      if (putResult.isErr()) {
-        return err(putResult.error);
-      }
-    }
+  const resolvedGets: Record<string, BoxLocation> = {};
+  for (const [key, location] of Object.entries(inputBoxLocationRecord)) {
+    resolvedGets[key] = {
+      key: location.key,
+      workflow: location.workflow ?? workflowName,
+      workspace: workspaceName,
+      strategy: location.strategy,
+    };
+  }
 
-    const inputRecord: Record<string, unknown> = {};
-    for (const [key, location] of Object.entries(inputBoxLocationRecord)) {
-      const resolvedLocation: BoxLocation = {
-        key: location.key,
-        workflow: location.workflow ?? workflowName,
-        workspace: workspaceName,
-        strategy: location.strategy,
-      };
-
-      const getResult = txStore.getSync(resolvedLocation);
-      if (getResult.isErr()) {
-        return err(getResult.error);
-      }
-      inputRecord[key] = getResult.value;
-    }
-
-    return ok(inputRecord);
+  return boxStore.transact({
+    puts: Object.values(outputBoxRecord),
+    gets: resolvedGets,
   });
 };
 
 export const syncDbFunc = async ({
-  input: { boxStoreLmdb, workflow, workspace, execution },
+  input: { boxStore, workflow, workspace, execution },
 }: {
   input: {
-    boxStoreLmdb: BoxStoreLmdb;
+    boxStore: BoxStore;
     workflow: ResolvedWorkflow;
     workspace: string;
     execution: MachineExecution;
@@ -109,7 +93,7 @@ export const syncDbFunc = async ({
   const inputBoxLocationRecord = inputBoxLocationRecordResult.value;
 
   const inputRecordResult = await syncData(
-    boxStoreLmdb,
+    boxStore,
     inputBoxLocationRecord,
     outputBoxRecord,
     workflow.name,

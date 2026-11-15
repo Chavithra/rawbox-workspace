@@ -14,7 +14,6 @@ import {
   parseConfig,
   resolveTargetFolder,
   resolveWorkflow,
-  resolveWorkspaceTargetFolder,
   collectBackendEnvProblems,
   collectBackendReferenceList,
   boxStorageFor,
@@ -33,6 +32,7 @@ import {
   type SeedOverrideLayer,
   type Workflow,
 } from '@rawbox/runner';
+import { resolveWorkspaceTargetFolderOrWarn } from '../../workspace/target-folder.js';
 import { ContractRegistryCache } from '@rawbox/plugin/core';
 import { budgetForStorage } from '@rawbox/store';
 import { getErrorMessage } from '../../utils/error.js';
@@ -95,7 +95,10 @@ function describeLoadFailure(failure: PluginRegistryLoadFailure): string {
     case 'import-failed':
       return `its contract registry failed to import: ${failure.cause}`;
     case 'not-a-registry':
-      return `"${failure.registryPath}" has no default-exported ContractRegistry`;
+      return (
+        `"${failure.registryPath}" has no default-exported ContractRegistry` +
+        (failure.cause ? ` (${failure.cause})` : '')
+      );
   }
 }
 
@@ -171,18 +174,17 @@ async function readLock(workspaceDirectory: string): Promise<LockRead> {
   // `rawbox.lock` has no extension, and is documented in YAML while the data
   // model is plain JSON-compatible. `parseConfig` accepts both, so reading it
   // here does not pin the writer to one encoding.
-  let data: unknown;
-  try {
-    data = parseConfig(content, lockPath);
-  } catch (error) {
+  const parsedLock = parseConfig(content, lockPath);
+  if (parsedLock.isErr()) {
     return {
       status: 'invalid',
       message:
-        `"${lockPath}" is not valid JSON or YAML: ${getErrorMessage(error)}\n` +
+        `${parsedLock.error}\n` +
         `The lock is generated — do not hand-edit it. Regenerate with: ` +
         `npx rawbox-cli workflow lock <workflow file>`,
     };
   }
+  const data: unknown = parsedLock.value;
 
   if (!lockValidator.Check(data)) {
     const details = Array.from(lockValidator.Errors(data))
@@ -327,7 +329,15 @@ export async function verifyWorkflow(
   try {
     // -- 1. Document schema ------------------------------------------------
     const content = await fs.readFile(absoluteWorkflowPath, 'utf-8');
-    const document = parseConfig(content, absoluteWorkflowPath);
+    const parsed = parseConfig(content, absoluteWorkflowPath);
+    if (parsed.isErr()) {
+      s.error('Validation failed.');
+      p.log.error(pc.red(parsed.error));
+      p.outro(pc.red('❌ Workflow verification failed with errors.'));
+      process.exit(1);
+      return;
+    }
+    const document = parsed.value;
 
     const typeResult = validateWorkflowType(document, workflowPath);
     if (typeResult.isErr()) {
@@ -464,6 +474,9 @@ export async function verifyWorkflow(
               `  - ${RAWBOX_LOCK_FILENAME} integrity\n` +
               `Directories searched:\n` +
               discovery.searchedList.map((directory) => `  - ${directory}`).join('\n') +
+              (discovery.unreadableList
+                ? `\nCould not read:\n${discovery.unreadableList.map((entry) => `  - ${entry}`).join('\n')}`
+                : '') +
               `\nPass --workspace <file> to verify against a specific workspace.\n` +
               `Or run without a workspace document at all: --workspace-name <name>.`,
           ),
@@ -511,10 +524,23 @@ export async function verifyWorkflow(
       const workspaceAbsolutePath = path.resolve(process.cwd(), workspaceFile);
       workspaceDirectory = path.dirname(workspaceAbsolutePath);
 
-      const workspaceDocument = parseConfig(
+      const parsedWorkspace = parseConfig(
         await fs.readFile(workspaceAbsolutePath, 'utf-8'),
         workspaceAbsolutePath,
       );
+      if (parsedWorkspace.isErr()) {
+        p.log.error(pc.red(parsedWorkspace.error));
+        p.outro(pc.red('❌ Workflow verification failed with errors.'));
+        process.exit(1);
+        return;
+      }
+      // Read as-is, not through the `Workspace` schema (see below); an
+      // empty or scalar document simply has no fields to read.
+      const workspaceDocument: Record<string, unknown> | undefined = isPlainObject(
+        parsedWorkspace.value,
+      )
+        ? parsedWorkspace.value
+        : undefined;
 
       if (
         isPlainObject(workspaceDocument) &&
@@ -541,7 +567,7 @@ export async function verifyWorkflow(
       // is not a map simply yields no ids, and the unknown-id diagnostic below
       // then says so in the vocabulary of the *workflow* being verified.
       workspaceBackends = isPlainObject(workspaceDocument?.backends)
-        ? (workspaceDocument.backends as BackendMap)
+        ? (workspaceDocument?.backends as BackendMap)
         : undefined;
       workspaceBackendSource = workspaceFile;
       workspaceSeedOverrides = isPlainObject(workspaceDocument)
@@ -600,7 +626,7 @@ export async function verifyWorkflow(
     // *both* documents — and it is placed here, immediately after the workspace
     // context is settled, for exactly that reason.
     //
-    // **So a `redis-kv` workflow is shape-verifiable alone and
+    // **So a backend-backed workflow is shape-verifiable alone and
     // connection-verifiable only with its workspace.** Everything above this
     // point — the schema, the strategy-field diagnostics, the storage budget —
     // read the workflow document and nothing else, and they still pass for a
@@ -643,8 +669,8 @@ export async function verifyWorkflow(
           workspaceSource: workspaceBackendSource,
         }),
         // Only the backends THIS workflow references. A workflow touching no
-        // Redis must not fail because the workspace also declares a `prod`
-        // backend whose password this developer does not hold — see
+        // external backend must not fail because the workspace also declares a
+        // `prod` backend whose password this developer does not hold — see
         // `collectBackendEnvProblems` for why the scope is the caller's choice.
         ...collectBackendEnvProblems({
           backends: workspaceBackends,
@@ -777,7 +803,7 @@ export async function verifyWorkflow(
       scratchWorkspaceName !== undefined
         ? resolveTargetFolder(workspaceDirectory!, {})
         : workspaceFile
-          ? await resolveWorkspaceTargetFolder(path.resolve(process.cwd(), workspaceFile))
+          ? await resolveWorkspaceTargetFolderOrWarn(path.resolve(process.cwd(), workspaceFile))
           : undefined;
     const searchDirectoryList = [
       ...new Set([

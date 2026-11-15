@@ -293,7 +293,7 @@ describe('box-size bench — the double pack', () => {
       );
       await fs.mkdir(fileURLToPath(dbDirUrl), { recursive: true });
 
-      const store = BoxStoreLmdb.create(workspace, dbDirUrl);
+      const store = BoxStoreLmdb.create(workspace, dbDirUrl)._unsafeUnwrap();
       const dbi = store.dbiCache.getOrCreateDbi(workflow)._unsafeUnwrap();
 
       try {

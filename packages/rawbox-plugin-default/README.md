@@ -74,7 +74,7 @@ Returned labels may be step labels or the reserved labels `__START__`, `__END__`
 
 | `operation:` | Input | Jump Behavior |
 | --- | --- | --- |
-| `control-flow/jump` | `condition` (Boolean), `label` (String) | Always jumps to `label` (the `condition` field is currently ignored — prefer `branch`). |
+| `control-flow/jump` | `label` (String) | Always jumps to `label` (unconditional jump; for conditional branching use `branch`). |
 | `control-flow/branch` | `condition` (Boolean), `thenLabel`, `elseLabel` (String) | Real if/else: `thenLabel` when true, `elseLabel` when false. |
 | `control-flow/switch` | `value` (String), `caseMap` (Record<String, String>), `defaultLabel` (String) | Multi-way dispatch: the label mapped to `value` (own properties only), else `defaultLabel`. |
 | `control-flow/loop-gate` | `counter`, `max` (Number), `loopLabel`, `exitLabel` (String) | `loopLabel` while `counter < max` (strict), else `exitLabel`. |
@@ -227,8 +227,6 @@ storage:
       seed: 2000
     monitor_label:
       seed: "grid + reconciler"
-    monitor_loop_condition:
-      seed: true
     monitor_loop_label:
       seed: snapshot
 
@@ -254,7 +252,6 @@ steps:
     plugin: "@rawbox/rawbox-plugin-default"
     operation: control-flow/jump
     inputs:
-      condition: monitor_loop_condition   # jump ignores the value; a seed still must be Boolean
       label: monitor_loop_label
 ```
 

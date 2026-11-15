@@ -249,7 +249,8 @@ export class PluginDiscoverer {
     const failure = result.error;
     if (failure.kind === 'not-a-registry') {
       return err(
-        `Module at '${pluginName}' does not have a default export ContractRegistry.`,
+        `Module at '${pluginName}' does not have a default export ContractRegistry.` +
+          (failure.cause ? ` ${failure.cause[0]!.toUpperCase()}${failure.cause.slice(1)}.` : ''),
       );
     }
     if (failure.kind === 'import-failed') {

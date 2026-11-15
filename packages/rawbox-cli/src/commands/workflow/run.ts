@@ -16,7 +16,6 @@ import {
   parseConfig,
   resolveLogsConfig,
   resolveTargetFolder,
-  resolveWorkspaceTargetFolder,
   runWorkflowInstance,
   setupNpmPackage,
   setupWorkspace,
@@ -27,6 +26,7 @@ import {
   type Workspace,
   type WorkspaceSource,
 } from '@rawbox/runner';
+import { resolveWorkspaceTargetFolderOrWarn } from '../../workspace/target-folder.js';
 import { getErrorMessage } from '../../utils/error.js';
 import { parseSeedFlagList, seedOverrideLayerFromFlags } from '../../utils/seed-flag.js';
 import { getProcessStartedAtMs } from '../../runs/pid-probe.js';
@@ -398,7 +398,13 @@ export async function runWorkflowCommand(
   let workflow: Workflow;
   try {
     const content = await fs.readFile(absoluteWorkflowPath, 'utf-8');
-    const document = parseConfig(content, absoluteWorkflowPath);
+    const parsed = parseConfig(content, absoluteWorkflowPath);
+    if (parsed.isErr()) {
+      p.log.error(pc.red(parsed.error));
+      process.exit(1);
+      return;
+    }
+    const document = parsed.value;
 
     const typeResult = validateWorkflowType(document, workflowPath);
     if (typeResult.isErr()) {
@@ -474,6 +480,9 @@ export async function runWorkflowCommand(
           `Could not locate a workspace document for "${workflowPath}". Running a workflow ` +
             `needs a workspace context to resolve plugins and scope storage. Directories searched:\n` +
             discovery.searchedList.map((directory) => `  - ${directory}`).join('\n') +
+            (discovery.unreadableList
+              ? `\nCould not read:\n${discovery.unreadableList.map((entry) => `  - ${entry}`).join('\n')}`
+              : '') +
             `\nPass it explicitly: npx rawbox-cli workflow run ${workflowPath} --workspace <workspace file>\n` +
             `Or run without a workspace document at all: npx rawbox-cli workflow run ${workflowPath} ` +
             `--workspace-name <name>`,
@@ -486,7 +495,7 @@ export async function runWorkflowCommand(
 
   const resolvedTargetFolder = scratchWorkspace
     ? resolveTargetFolder(scratchWorkspaceDir!, scratchWorkspace)
-    : await resolveWorkspaceTargetFolder(workspaceFile!);
+    : await resolveWorkspaceTargetFolderOrWarn(workspaceFile!);
 
   // -- 2b. --fresh: wipe a prior scratch run's state -------------------------
   // Only reachable alongside `--workspace-name` (yargs' `.implies` enforces

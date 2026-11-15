@@ -143,9 +143,9 @@ export function ringUsed(
  * This is the single statement of `lmdb-fifo`'s reserved slot. `lmdb-fifo`'s
  * descriptor row points `seedCapacity` here rather than restating `- 1`, so
  * the verifier's idea of how many entries a seed may enqueue and the ring's
- * own idea of how many it can hold are one function. A queue strategy without
- * a reserved slot — a Redis native list, say — states its own capacity in its
- * own row and does not come through here.
+ * own idea of how many it can hold are one function. A future queue strategy
+ * without a reserved slot — a native list backend, say — states its own
+ * capacity in its own row and does not come through here.
  */
 export function ringCapacity(queueSizeMax: number): number {
   return queueSizeMax - 1;

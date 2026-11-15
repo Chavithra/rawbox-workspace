@@ -58,16 +58,14 @@ test projects are in the `tsc --build` graph, so a type error in a test file fai
 build. Tests land with the code, never in a trailing task.
 
 > [!NOTE]
-> **The CLI suite is not idempotent.** It leaves `packages/rawbox-cli/tests/temp-store-watch-test/`
-> behind, and a second run trips on the leftover directory with ~8 failures that have
-> nothing to do with your change. Remove it between runs:
+> **If a CLI test run is aborted mid-flight (e.g., `SIGKILL`),** `store-watch.test.ts` may
+> leave `packages/rawbox-cli/tests/temp-store-watch-test/` behind (`beforeEach`, `afterEach`,
+> and `afterAll` remove it on normal runs). If an interrupted run leaves it behind and a
+> follow-up run trips on stale state, clean it manually:
 >
 > ```bash
 > rm -rf packages/rawbox-cli/tests/temp-store-watch-test
 > ```
->
-> Worth fixing at the source (the test should clean up in an `afterAll`), but until then
-> a red second run is not evidence of a regression — re-run from clean before believing it.
 
 ## 4. Testing what a consumer gets
 

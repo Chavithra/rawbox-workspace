@@ -1,5 +1,16 @@
-export type { BoxStore } from './box-store/box-store.js';
-export { Box, BoxLocation, BoxStrategy, BoxLocationRecord, WriteBoxLocation, ReadBoxLocation } from './box.js';
+export type { BoxStore, BoxTransactionBatch } from './box-store/box-store.js';
+export {
+  Box,
+  BoxLocation,
+  BoxStrategy,
+  BoxLocationRecord,
+  WriteBoxLocation,
+  ReadBoxLocation,
+  LmdbKV,
+  LmdbFIFO,
+  PgKV,
+  PgFIFO,
+} from './box.js';
 export { StrictObject } from './schema.js';
 export { buildBoxRecord, buildRecord } from './box-utils.js';
 export {

@@ -30,9 +30,9 @@ import {
   findWorkspaceDocumentIn,
   loadAndValidateWorkspace,
   resolveLogsConfig,
-  resolveWorkspaceTargetFolder,
   type LogsOverride,
 } from '@rawbox/runner';
+import { resolveWorkspaceTargetFolderOrWarn } from '../../workspace/target-folder.js';
 
 import { getErrorMessage } from '../../utils/error.js';
 import { findRunsDirectories } from '../../runs/scan.js';
@@ -124,7 +124,7 @@ export async function runsPruneCommand(options: RunsPruneOptions = {}): Promise<
     if (options.workspace !== undefined) {
       const workspaceFile = path.resolve(cwd, options.workspace);
       targetList = [
-        { targetFolder: await resolveWorkspaceTargetFolder(workspaceFile), workspaceFile },
+        { targetFolder: await resolveWorkspaceTargetFolderOrWarn(workspaceFile), workspaceFile },
       ];
     } else {
       const hitList = await findRunsDirectories(cwd);

@@ -235,8 +235,6 @@ storage:
       seed: 0
     sleep_ms:
       seed: 15000
-    jump_condition:
-      seed: true
     jump_label:
       seed: throttle-step
 
@@ -276,7 +274,6 @@ steps:
     plugin: "${PLUGIN_PACKAGE}"
     operation: control-flow/jump
     inputs:
-      condition: jump_condition
       label: jump_label
     errors:
       message: jump_error

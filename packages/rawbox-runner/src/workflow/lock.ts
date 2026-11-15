@@ -152,7 +152,8 @@ function describeLockFailure(
         `Plugin "${failure.packageName}" resolved to "${failure.registryPath}", but that module has no default export ` +
         `carrying a "contractRecord".\n` +
         `  A Rawbox plugin must default-export the registry built by setupContractRegistry ` +
-        `from its "${REGISTRY_SUBPATH}" entry point.`
+        `from its "${REGISTRY_SUBPATH}" entry point.` +
+        (failure.cause ? `\n  ${failure.cause}` : '')
       );
   }
 }

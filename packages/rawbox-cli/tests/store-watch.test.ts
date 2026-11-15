@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -83,6 +83,10 @@ afterEach(async () => {
   await fs.rm(rootDir, { recursive: true, force: true });
 });
 
+afterAll(async () => {
+  await fs.rm(rootDir, { recursive: true, force: true });
+});
+
 async function seedWorkspace(name: string, workflow: string): Promise<string> {
   const workspaceDir = path.join(rootDir, name);
   await fs.mkdir(workspaceDir, { recursive: true });
@@ -93,7 +97,7 @@ async function seedWorkspace(name: string, workflow: string): Promise<string> {
   );
 
   const dataUrl = pathToFileURL(`${path.join(workspaceDir, '.rawbox', 'data')}/`);
-  const store = BoxStoreLmdb.create(name, dataUrl);
+  const store = BoxStoreLmdb.create(name, dataUrl)._unsafeUnwrap();
   store.putSync({
     content: { sequence: -1 },
     location: {

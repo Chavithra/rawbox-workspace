@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { getErrorMessage } from '../utils/error.js';
 import { parseConfig } from '../utils/config.js';
 import { DOCUMENT_KIND } from '../workflow/workflow-types.js';
 import { resolveWorkspaceWorkflowPath } from './workflow-path.js';
@@ -58,11 +59,21 @@ interface WorkspaceDocumentMatch {
 /** Every `kind: Workspace` document directly inside `directory`. */
 async function findWorkspaceDocuments(
   directory: string,
+  unreadableList: string[] = [],
 ): Promise<WorkspaceDocumentMatch[]> {
   let entryList: string[];
   try {
     entryList = await fs.readdir(directory);
-  } catch {
+  } catch (e) {
+    // A directory that is not there holds no workspace, full stop. One that
+    // is there but cannot be listed (`EACCES`) is a different answer, and
+    // folding it into "nothing found" sends the author to `--workspace <file>`
+    // when the fix is a permission. Recorded, never thrown: discovery is a
+    // walk over eight ancestors and one of them being locked down is normal.
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+      unreadableList.push(`${directory}: ${getErrorMessage(e)}`);
+    }
     return [];
   }
 
@@ -83,7 +94,12 @@ async function findWorkspaceDocuments(
       if (!stats.isFile() || stats.size > MAX_CANDIDATE_BYTES) {
         continue;
       }
-      const data = parseConfig(await fs.readFile(fullPath, 'utf-8'), fullPath);
+      const parsed = parseConfig(await fs.readFile(fullPath, 'utf-8'), fullPath);
+      if (parsed.isErr()) {
+        // Unparseable — by definition not a workspace document.
+        continue;
+      }
+      const data = parsed.value;
       if (isPlainObject(data) && data.kind === DOCUMENT_KIND.WORKSPACE) {
         const rawWorkflowPathList = Array.isArray(data.workflowPathList)
           ? data.workflowPathList
@@ -110,6 +126,13 @@ export interface WorkspaceDiscovery {
   ambiguousList?: string[];
   /** Directories inspected, reported when nothing was found. */
   searchedList: string[];
+  /**
+   * Directories that exist but could not be listed, as `<dir>: <reason>`.
+   * Present only when non-empty, and only on the nothing-found outcome: a
+   * workspace found lower down makes an unreadable ancestor irrelevant, but
+   * one found nowhere may be sitting behind exactly that permission.
+   */
+  unreadableList?: string[];
 }
 
 /**
@@ -147,6 +170,7 @@ export async function discoverWorkspace(
 ): Promise<WorkspaceDiscovery> {
   const resolvedWorkflowPath = path.resolve(workflowPath);
   const searchedList: string[] = [];
+  const unreadableList: string[] = [];
   const visited = new Set<string>();
 
   const inspect = async (
@@ -158,7 +182,7 @@ export async function discoverWorkspace(
     visited.add(directory);
     searchedList.push(directory);
 
-    const matchList = await findWorkspaceDocuments(directory);
+    const matchList = await findWorkspaceDocuments(directory, unreadableList);
     if (matchList.length === 0) {
       return undefined;
     }
@@ -202,7 +226,10 @@ export async function discoverWorkspace(
     return found;
   }
 
-  return { searchedList };
+  return {
+    searchedList,
+    ...(unreadableList.length > 0 ? { unreadableList } : {}),
+  };
 }
 
 /**

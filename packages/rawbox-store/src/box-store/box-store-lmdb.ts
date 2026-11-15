@@ -10,7 +10,7 @@ import {
 import { ok, err, Result } from 'neverthrow';
 
 import { type Box, type BoxLocation, type BoxStrategy } from '../box.js';
-import { type BoxStore } from './box-store.js';
+import { type BoxStore, type BoxTransactionBatch } from './box-store.js';
 import { fileURLToPath } from 'node:url';
 import {
   measureKeySize,
@@ -321,6 +321,15 @@ export class LmdbEnvCache<TValue, TKey extends Key> {
    * figure, not a ceiling this layer applies (see the module comment), and
    * `mapSize` would not be a ceiling even if it were passed — lmdb-js grows the
    * map rather than failing the write.
+   *
+   * An `Err`, never a throw, when the environment cannot be opened. `open()`
+   * throws on every real failure — a path component that is a file
+   * (`ENOTDIR`), an unwritable directory (`EACCES`), a corrupt or locked
+   * environment (`MDB_*`) — and never returns nothing, so the catch below is
+   * the whole of this method's error path. The message names the identifier
+   * and the resolved directory, because "which workspace, where" is what a
+   * caller reporting this needs (`BoxObserverLmdb.openSync` words its own
+   * failure the same way).
    */
   public getOrCreateEnv(
     envIdentifier: string,
@@ -338,15 +347,19 @@ export class LmdbEnvCache<TValue, TKey extends Key> {
     } else {
       const envFolderUrl = resolveEnvFolderUrl(rootDirectoryUrl, envIdentifier);
       const envFolderPath = fileURLToPath(envFolderUrl);
-      env = open<TValue, TKey>({
-        ...dbiOptions,
-        path: envFolderPath,
-      });
-      if (env) {
+
+      try {
+        env = open<TValue, TKey>({
+          ...dbiOptions,
+          path: envFolderPath,
+        });
         envMap.set(envIdentifier, env);
         result = ok(env);
-      } else {
-        result = err(`Failed to open environment '${envIdentifier}'`);
+      } catch (e: unknown) {
+        const error = e instanceof Error ? e.message : String(e);
+        result = err(
+          `Failed to open environment '${envIdentifier}' at ${envFolderPath}: ${error}`,
+        );
       }
     }
 
@@ -354,7 +367,7 @@ export class LmdbEnvCache<TValue, TKey extends Key> {
   }
 }
 
-class BoxStoreLmdbKv implements BoxStore {
+class BoxStoreLmdbKv implements Pick<BoxStore, 'get' | 'put'> {
   public static getStatic(
     dbi: Database<unknown, string>,
     boxLocation: BoxLocation,
@@ -413,14 +426,15 @@ class BoxStoreLmdbKv implements BoxStore {
     return this.getSync(boxLocation);
   }
 
+  // `getOrCreateDbi` is a `Result` because `openDB` can throw — most plainly
+  // once the environment holds lmdb-js's default `maxDbs` of 12 workflow
+  // databases and a thirteenth is asked for (`MDB_DBS_FULL`). That `Err` is
+  // chained, never unwrapped: an unwrap here would turn a `Result`-returning
+  // method into a throw across the package's API boundary.
   public getSync(boxLocation: BoxLocation): Result<unknown, string> {
-    const dbiCache = this.dbiCache;
-
-    const workflow = boxLocation.workflow;
-
-    const dbi = dbiCache.getOrCreateDbi(workflow)._unsafeUnwrap();
-
-    return BoxStoreLmdbKv.getStatic(dbi, boxLocation);
+    return this.dbiCache
+      .getOrCreateDbi(boxLocation.workflow)
+      .andThen((dbi) => BoxStoreLmdbKv.getStatic(dbi, boxLocation));
   }
 
   public async put(box: Box<unknown>): Promise<Result<void, string>> {
@@ -428,16 +442,13 @@ class BoxStoreLmdbKv implements BoxStore {
   }
 
   public putSync(box: Box<unknown>): Result<void, string> {
-    const dbiCache = this.dbiCache;
-
-    const workflow = box.location.workflow;
-    const dbi = dbiCache.getOrCreateDbi(workflow)._unsafeUnwrap();
-
-    return BoxStoreLmdbKv.putStatic(dbi, box);
+    return this.dbiCache
+      .getOrCreateDbi(box.location.workflow)
+      .andThen((dbi) => BoxStoreLmdbKv.putStatic(dbi, box));
   }
 }
 
-class BoxStoreLmdbFifo implements BoxStore {
+class BoxStoreLmdbFifo implements Pick<BoxStore, 'get' | 'put'> {
   /**
    * Queue head, tail, and data items are stored using namespaced string keys,
    * built by `fifoHeadKey` / `fifoTailKey` / `fifoDataKey` in `box-peek.ts`.
@@ -461,13 +472,23 @@ class BoxStoreLmdbFifo implements BoxStore {
     let result: Result<unknown, string> = err('Unknown error');
 
     if (strategyName == 'lmdb-fifo') {
+      // Resolved before the transaction opens, as `putStatic` does: a cache
+      // lookup that opens no transaction, and an `Err` (`openDB` threw —
+      // `MDB_DBS_FULL` past lmdb-js's default 12 databases) is returned as
+      // itself rather than caught below and mislabelled a transaction failure.
+      const dbiResult = dbiCache.getOrCreateDbi(workflow);
+
+      if (dbiResult.isErr()) {
+        return err(dbiResult.error);
+      }
+
+      const dbi = dbiResult.value;
       const headDbiKey = fifoHeadKey(key);
       const tailDbiKey = fifoTailKey(key);
       const queueSizeMax = boxLocation.strategy.queueSizeMax;
 
       try {
         dbiCache.env.transactionSync(() => {
-          const dbi = dbiCache.getOrCreateDbi(workflow)._unsafeUnwrap();
           const head = (dbi.get(headDbiKey) as number) || 0;
           const tail = (dbi.get(tailDbiKey) as number) || 0;
 
@@ -510,8 +531,16 @@ class BoxStoreLmdbFifo implements BoxStore {
       // or an over-long derived key is a caller error, not a storage
       // failure, and must not take a write lock only to abort.
       // `getOrCreateDbi` is a cache lookup, safe to call outside a
-      // transaction.
-      const dbi = dbiCache.getOrCreateDbi(workflow)._unsafeUnwrap();
+      // transaction. Its `Err` is returned, never unwrapped: `openDB` throws
+      // past lmdb-js's default `maxDbs` of 12, and that must reach the caller
+      // as a `Result` like every other failure on this path.
+      const dbiResult = dbiCache.getOrCreateDbi(workflow);
+
+      if (dbiResult.isErr()) {
+        return err(dbiResult.error);
+      }
+
+      const dbi = dbiResult.value;
 
       const keySizeCheckResult = checkKeySize(dbi, box.location.strategy, key);
 
@@ -585,14 +614,14 @@ class BoxStoreLmdbFifo implements BoxStore {
 /**
  * The `default:` arm of this store's two strategy switches.
  *
- * **A backstop, not the diagnostic.** `BoxStrategy` is open to strategies this
- * class does not route — `redis-kv` is one — and a run declaring one is refused
- * before it starts, by `collectUnwiredStrategyProblems` in `@rawbox/runner`'s
- * `workflow/store-support.ts`, which names the declaration site and says the
- * store is missing from this build. Reaching *here* means that check was
- * bypassed: a caller using `@rawbox/store` directly, with no workflow and no
- * runner. So the message says what such a caller needs — this class routes LMDB
- * and only LMDB, whatever the name turns out to be.
+ * **A backstop, not the diagnostic.** `BoxStrategy` can be extended with
+ * strategies this class does not route, and a run declaring an unrouted
+ * strategy is refused before it starts, by `collectUnwiredStrategyProblems` in
+ * `@rawbox/runner`'s `workflow/store-support.ts`, which names the declaration
+ * site and says the store is missing from this build. Reaching *here* means
+ * that check was bypassed: a caller using `@rawbox/store` directly, with no
+ * workflow and no runner. So the message says what such a caller needs — this
+ * class routes LMDB and only LMDB, whatever the name turns out to be.
  *
  * It deliberately does **not** claim the name is valid, because this arm is also
  * where an unvalidated `BoxLocation` lands: `BoxStrategy` is what a document
@@ -601,9 +630,9 @@ class BoxStoreLmdbFifo implements BoxStore {
  * share one sentence.
  *
  * An `Err` and never a throw: nothing may cross this package's API boundary as
- * an exception (`packages/rawbox-store/README.md`, "API Reference"). And never
- * a fall-through to `lmdb-kv`, which would put a caller's data in a file when
- * they asked for a server, with nothing anywhere saying so.
+ * an exception (`packages/rawbox-store/README.md`). And never
+ * a fall-through to `lmdb-kv`, which would put a caller's data in this file
+ * when they asked for a different backend, with nothing anywhere saying so.
  */
 function unsupportedStrategyError(strategyName: string): string {
   return (
@@ -622,6 +651,14 @@ export class BoxStoreLmdb implements BoxStore {
   /**
    * Opens the workspace environment and returns a store over it.
    *
+   * An `Err`, never a throw, when the environment cannot be opened — the same
+   * contract as {@link BoxObserverLmdb.openSync},
+   * and the one the README states for the whole package.
+   * The message comes from {@link LmdbEnvCache.getOrCreateEnv} and names the
+   * workspace, the resolved directory and lmdb's own reason (`ENOTDIR`,
+   * `EACCES`, `MDB_*`), which is what `@rawbox/runner` reports as a
+   * `bootstrap.error` at stage `store`.
+   *
    * There is no budget parameter. The figure `box-size.ts` computes is for
    * sizing a volume or a container before the run; the store neither receives
    * it nor consults it on any write (see the module comment).
@@ -629,18 +666,12 @@ export class BoxStoreLmdb implements BoxStore {
   public static create(
     workspace: string,
     rootDirectoryUrl: URL,
-  ): BoxStoreLmdb {
+  ): Result<BoxStoreLmdb, string> {
     const envCache = new LmdbEnvCache<unknown, string>(rootDirectoryUrl);
 
-    // Safe to unwrap: the cache was created one line above, so the only way
-    // this fails is `open()` returning nothing.
-    const env = envCache.getOrCreateEnv(workspace)._unsafeUnwrap();
-
-    const dbiCache = new LmdbDbiCache<unknown, string>(env);
-
-    const boxStore = new BoxStoreLmdb(dbiCache);
-
-    return boxStore;
+    return envCache
+      .getOrCreateEnv(workspace)
+      .map((env) => new BoxStoreLmdb(new LmdbDbiCache<unknown, string>(env)));
   }
 
   public constructor(public readonly dbiCache: LmdbDbiCache<unknown, string>) {
@@ -772,12 +803,12 @@ export class BoxStoreLmdb implements BoxStore {
    * (`rawbox-runner/src/machine/actors/sync-db-actor.ts`), `exitFunc`
    * (`.../exit-actor.ts`) and the seeding pass
    * (`rawbox-runner/src/tool/run-workflow.ts`). A store whose operations are
-   * network calls — Redis — cannot answer synchronously, and a run loop that
+   * network or async I/O calls cannot answer synchronously, and a run loop that
    * *calls* synchronously cannot be pointed at one without being rewritten
-   * around every write. Awaiting here means the swap is a change of binding,
-   * not a change of control flow. This mirrors {@link BoxStoreLmdb.get} and
-   * {@link BoxStoreLmdb.put}, which are async wrappers over `getSync`/`putSync`
-   * for the same reason.
+   * around every write. Awaiting here means swapping backends is a change of
+   * binding, not a change of control flow. This mirrors {@link BoxStoreLmdb.get}
+   * and {@link BoxStoreLmdb.put}, which are async wrappers over
+   * `getSync`/`putSync` for the same reason.
    *
    * Note what this does *not* cost: because the body contains no `await`, an
    * `async` method still executes `transactionSync` — and therefore the whole
@@ -805,14 +836,15 @@ export class BoxStoreLmdb implements BoxStore {
    * This is also why `getSync`/`putSync` must continue to exist alongside the
    * Promise-returning `get`/`put`: they are the forms the callback calls.
    *
-   * **A note for the backend that comes next.** A callback that must be
-   * synchronous on LMDB and asynchronous on Redis cannot be one interface —
+   * **A note for future backends.** A callback that must be synchronous on LMDB
+   * and asynchronous on a network or async backend cannot be one interface —
    * which is why `transaction` is *not* on the {@link BoxStore} interface. All
    * three runner call sites do the same shape of work (write a set of boxes,
    * optionally read a set of locations, atomically), so the portable primitive
    * is likely that work expressed as **data** — `{writes, reads}` — which each
-   * backend executes its own way: `transactionSync` here, `MULTI` or a Lua
-   * script there. That change belongs with the Redis store, not here.
+   * backend executes its own way (`transactionSync` here, or a backend-specific
+   * atomic batch on a future store). That change belongs with a future
+   * multi-backend store layer, not here.
    *
    * ## Abort semantics
    *
@@ -855,5 +887,53 @@ export class BoxStoreLmdb implements BoxStore {
     }
 
     return methodResult;
+  }
+
+  /**
+   * Executes a declarative batch of puts followed by gets inside one synchronous
+   * LMDB write transaction. Aborts cleanly on the first `Err`.
+   */
+  public async transact(
+    batch: BoxTransactionBatch,
+  ): Promise<Result<Record<string, unknown>, string>> {
+    const puts = batch.puts ?? [];
+    const gets = batch.gets ?? {};
+
+    // Pre-open every referenced workflow DBI outside the transaction so an
+    // aborted transaction does not roll back `mdb_dbi_open` while leaving a
+    // stale DBI handle cached in `this.dbiCache`.
+    const workflows = new Set<string>();
+    for (const box of puts) {
+      workflows.add(box.location.workflow);
+    }
+    for (const boxLocation of Object.values(gets)) {
+      workflows.add(boxLocation.workflow);
+    }
+    for (const workflow of workflows) {
+      const dbiResult = this.dbiCache.getOrCreateDbi(workflow);
+      if (dbiResult.isErr()) {
+        return err(dbiResult.error);
+      }
+    }
+
+    return this.transaction((txStore) => {
+      for (const box of puts) {
+        const putResult = txStore.putSync(box);
+        if (putResult.isErr()) {
+          return err(putResult.error);
+        }
+      }
+
+      const outputRecord: Record<string, unknown> = {};
+      for (const [inputKey, boxLocation] of Object.entries(gets)) {
+        const getResult = txStore.getSync(boxLocation);
+        if (getResult.isErr()) {
+          return err(getResult.error);
+        }
+        outputRecord[inputKey] = getResult.value;
+      }
+
+      return ok(outputRecord);
+    });
   }
 }

@@ -1,6 +1,6 @@
 import { Type, type Static } from 'typebox';
 import { Compile } from 'typebox/compile';
-import { BoxStoreLmdb } from '@rawbox/store/box-store-lmdb';
+import { type BoxStore } from '@rawbox/store';
 import { ResolvedWorkflow } from '../workflow/workflow-types.js';
 
 export const DoneStep = Type.Object({
@@ -75,7 +75,7 @@ export type MachineContext = Static<typeof MachineContext>;
 export const MachineInput = Type.Intersect([
   MachineContext,
   Type.Object({
-    boxStoreLmdb: BoxStoreLmdb,
+    boxStore: Type.Unsafe<BoxStore>(Type.Any()),
   }),
 ]);
 

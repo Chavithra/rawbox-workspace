@@ -71,7 +71,7 @@ export interface StoreWatchOptions {
    *
    * When a second backend supplies an observer, this seam needs a decision
    * rather than a widening: the snapshot-hygiene property it asserts is an
-   * LMDB property, and the Redis equivalent is a different assertion.
+   * LMDB-specific property.
    */
   onPoll?: (observer: BoxObserverLmdb, pollIndex: number) => void;
 }
@@ -205,7 +205,6 @@ function pollOnce(
   }
 }
 
-/** The `discoverAllKeys` counterpart for a merged `WorkspaceObserverSet` — see that function for the "no explicit selector" contract. */
 async function discoverAllKeysAsync(
   observerSet: WorkspaceObserverSet,
 ): Promise<StoreWatchKeySelector[]> {
@@ -227,13 +226,6 @@ async function discoverAllKeysAsync(
   return selectorList;
 }
 
-/**
- * The `pollOnce` counterpart for a merged `WorkspaceObserverSet` — same
- * change-detection contract, over `observerSet.peek`/`peekAll` instead of a
- * single LMDB observer's synchronous methods, so a workspace whose
- * `backends:` map declares a Redis server can be watched the same way an
- * LMDB-only one always has been.
- */
 async function pollOnceAsync(
   observerSet: WorkspaceObserverSet,
   explicitSelectorList: readonly StoreWatchKeySelector[],
@@ -257,7 +249,7 @@ async function pollOnceAsync(
       continue;
     }
 
-    const isQueue = entry.strategy === 'lmdb-fifo' || entry.strategy === 'redis-fifo';
+    const isQueue = entry.strategy === 'lmdb-fifo' || entry.strategy === 'pg-fifo';
     const readResult = isQueue
       ? await observerSet.peekAll(entry, workflow, key)
       : await observerSet.peek(entry, workflow, key);
@@ -314,9 +306,6 @@ export async function storeWatchCommand(
   const fingerprintMap = new Map<string, string>();
   const emit = buildEmit(options, write);
 
-  // Every LMDB-only workspace takes this branch, byte-for-byte unchanged from
-  // before Redis observation existed — see `store list`'s identical note and
-  // `../../store/observers.ts`'s module comment.
   if (!hasDeclaredBackends(target)) {
     const openResult = BoxObserverLmdb.openSync(target.workspaceName, target.dataRootUrl);
     if (openResult.isErr()) {
@@ -327,18 +316,10 @@ export async function storeWatchCommand(
       process.exit(0);
       return;
     }
-    // Left at its inferred concrete type rather than annotated `BoxObserver`.
-    // Everything this function *does* with it goes through the interface —
-    // `discoverAllKeys` and `pollOnce` both take `BoxObserver`, and a
-    // `BoxObserverLmdb` satisfies it — but the `onPoll` test seam needs the
-    // reader table, which the interface deliberately does not promise. Widening
-    // here would only move that mismatch to the callback.
     const observer = openResult.value;
 
     try {
       let pollIndex = 0;
-      // No `maxPolls`: polls until the process is stopped (Ctrl+C), the same
-      // open-ended contract `runs tail --follow` uses. Tests bound this.
       while (options.maxPolls === undefined || pollIndex < options.maxPolls) {
         pollOnce(observer, target.workspaceName, selectorList, fingerprintMap, emit);
         options.onPoll?.(observer, pollIndex);
@@ -354,22 +335,13 @@ export async function storeWatchCommand(
     return;
   }
 
-  // A `backends:` block is declared: merge the LMDB environment (if one
-  // exists) with one `BoxObserverRedis` per backend — see
-  // `../../store/observers.ts`. There is no `onPoll` seam on this path: that
-  // hook inspects LMDB's reader table specifically (see its doc comment on
-  // `StoreWatchOptions`), which has no meaning once a poll may also be
-  // reading Redis.
   const observerSet = await openWorkspaceObserverSet(target);
 
-  // Printed once, up front, rather than after the polling loop exits — a
-  // user watching wants to know immediately why a backend is not
-  // contributing, not only once they stop the command.
-  for (const warning of observerSet.redisWarningList) {
-    write(`${warning}\n`);
-  }
-
   try {
+    for (const warning of observerSet.backendWarningList) {
+      write(`Warning: ${warning}\n`);
+    }
+
     let pollIndex = 0;
     while (options.maxPolls === undefined || pollIndex < options.maxPolls) {
       await pollOnceAsync(observerSet, selectorList, fingerprintMap, emit);
@@ -384,7 +356,7 @@ export async function storeWatchCommand(
   }
 }
 
-/** The `emit` closure both paths above share — identical output for either backend, since `ChangeRecord` itself is already backend-agnostic. */
+/** Builds the `emit` callback used by `pollOnce` to write text or JSON change records. */
 function buildEmit(
   options: StoreWatchOptions,
   write: (text: string) => void,

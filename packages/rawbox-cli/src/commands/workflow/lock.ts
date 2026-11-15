@@ -8,11 +8,11 @@ import {
   discoverWorkspace,
   lockWorkspacePlugins,
   parseConfig,
-  resolveWorkspaceTargetFolder,
   validateWorkflowType,
   RAWBOX_LOCK_FILENAME,
   type Workflow,
 } from '@rawbox/runner';
+import { resolveWorkspaceTargetFolderOrWarn } from '../../workspace/target-folder.js';
 
 import { getErrorMessage } from '../../utils/error.js';
 
@@ -43,7 +43,13 @@ export async function lockWorkflow(
     // 1. Load and schema-check the workflow. Locking a document that does not
     //    validate would record hashes for a file that can never run.
     const content = await fs.readFile(absoluteWorkflowPath, 'utf-8');
-    const document = parseConfig(content, absoluteWorkflowPath);
+    const parsed = parseConfig(content, absoluteWorkflowPath);
+    if (parsed.isErr()) {
+      p.log.error(pc.red(parsed.error));
+      process.exit(1);
+      return;
+    }
+    const document = parsed.value;
 
     const typeResult = validateWorkflowType(document, workflowPath);
     if (typeResult.isErr()) {
@@ -81,6 +87,9 @@ export async function lockWorkflow(
             `Could not locate a workspace document for "${workflowPath}".\n` +
               `${RAWBOX_LOCK_FILENAME} is written per workspace, so one is required. ` +
               `Searched:\n${discovery.searchedList.map((directory) => `  - ${directory}`).join('\n')}\n` +
+              (discovery.unreadableList
+                ? `Could not read:\n${discovery.unreadableList.map((entry) => `  - ${entry}`).join('\n')}\n`
+                : '') +
               `Pass it explicitly: npx rawbox-cli workflow lock ${workflowPath} --workspace <workspace file>`,
           ),
         );
@@ -103,7 +112,7 @@ export async function lockWorkflow(
     // workspace's target folder — the workspace directory itself unless the
     // document says otherwise. The lock is still written beside
     // `workspace.yaml`: the two are different questions.
-    const resolveFromDir = await resolveWorkspaceTargetFolder(workspaceFile);
+    const resolveFromDir = await resolveWorkspaceTargetFolderOrWarn(workspaceFile);
 
     const s = p.spinner();
     s.start(`Resolving ${packageNames.length} plugin(s) from ${pc.green(resolveFromDir)}...`);

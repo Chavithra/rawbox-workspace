@@ -1,7 +1,7 @@
 import { setup, assign, type AnyEventObject } from 'xstate';
 import type { Result } from 'neverthrow';
 
-import type { BoxStoreLmdb } from '@rawbox/store/box-store-lmdb';
+import type { BoxStore } from '@rawbox/store';
 import type { ContractRegistryCache } from '@rawbox/plugin/core';
 
 import { MachineContext, MachineInput, MachineEvent } from './machine-types.js';
@@ -66,6 +66,14 @@ type LegacyMachineInput = {
 
 /**
  * Turns an actor's `err` branch into `context.error`.
+ *
+ * **Why the `_unsafeUnwrap` calls in this file are safe, and what keeps them
+ * so.** Every `onDone` array below lists its `event.output.isErr()` branch
+ * FIRST, and XState takes the first transition whose guard passes — so by the
+ * time an `Ok`-side assigner unwraps, the `Err` case has already been routed
+ * to `stopping` through this function. That is an ordering invariant the
+ * types do not express: inserting a transition above an `isErr()` guard, or
+ * reordering one, arms every unwrap in this file. Keep the guard first.
  *
  * Every field is copied **structurally** — `typeof errVal?.x === 'string'`,
  * never `instanceof` — because the value crossed an actor boundary and may have
@@ -157,7 +165,7 @@ const runDoneAssigner = ({ context, event }: AssignerArgs) => {
  *   `undefined` takes `DEFAULT_PREFLIGHT_TIMEOUT_MS`; `0` disables the bound.
  */
 export const createWorkflowMachine = (
-  boxStoreLmdb: BoxStoreLmdb,
+  boxStore: BoxStore,
   contractRegistryCache: ContractRegistryCache,
   preflightTimeoutMs?: number | undefined,
 ) => {
@@ -253,7 +261,7 @@ export const createWorkflowMachine = (
             invoke: {
               src: 'syncDbActor',
               input: ({ context }) => ({
-                boxStoreLmdb: boxStoreLmdb,
+                boxStore: boxStore,
                 contractRegistryCache: contractRegistryCache,
                 execution: context.execution,
                 workflow: context.params.workflow,
@@ -281,7 +289,6 @@ export const createWorkflowMachine = (
               src: 'runActor',
               input: ({ context }) => ({
                 contractRegistryCache: contractRegistryCache,
-                boxStoreLmdb: boxStoreLmdb,
                 execution: context.execution,
                 workflow: context.params.workflow,
               }),
@@ -306,7 +313,7 @@ export const createWorkflowMachine = (
             invoke: {
               src: 'exitActor',
               input: ({ context }) => ({
-                boxStoreLmdb: boxStoreLmdb,
+                boxStore: boxStore,
                 workflow: context.params.workflow,
                 workspace: context.params.workspace,
                 execution: context.execution,

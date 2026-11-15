@@ -102,14 +102,7 @@ export interface WorkspaceStatusSnapshot {
   readonly storage: readonly WorkspaceStorageWorkflow[];
   /** Set instead of `storage` when no LMDB environment exists yet ("nothing has run"). */
   readonly storageUnavailable?: string;
-  /**
-   * One entry per declared `backends:` entry that could not be observed
-   * (unresolvable connection, unreachable server) — non-fatal, the same
-   * degrade-per-workflow posture this snapshot already has for a rotted
-   * workflow document. Absent for a workspace with no `backends:` block, and
-   * empty (never absent-vs-empty ambiguous) whenever every declared backend
-   * connected fine.
-   */
+  /** Warnings from declared remote backends that could not be observed. */
   readonly storageWarningList?: readonly string[];
 }
 
@@ -127,7 +120,11 @@ async function resolveWorkflowName(
 
   try {
     const content = await fs.readFile(fullPath, 'utf-8');
-    const document = parseConfig(content, fullPath);
+    const parsed = parseConfig(content, fullPath);
+    if (parsed.isErr()) {
+      return { name: fallback, resolved: false, loadError: parsed.error };
+    }
+    const document = parsed.value;
     const typeResult = validateWorkflowType(document, workflowPath);
     if (typeResult.isErr()) {
       return { name: fallback, resolved: false, loadError: typeResult.error.message };
@@ -207,7 +204,7 @@ async function buildLatestRun(
   };
 }
 
-/** One `WorkspaceStorageKey` from an enumerated entry — shared by both paths below. */
+/** Builds one `WorkspaceStorageKey` from an enumerated entry. */
 function buildStorageKey(entry: Pick<
   BoxInspection,
   'key' | 'strategy' | 'valueSizeBytes' | 'fifo' | 'queueDepth'
@@ -223,14 +220,6 @@ function buildStorageKey(entry: Pick<
 
 /**
  * Every key currently in the workspace's storage, grouped by workflow.
- *
- * Every LMDB-only workspace — no `backends:` block declared — takes the
- * first branch, byte-for-byte unchanged from before Redis observation
- * existed: `BoxObserverLmdb` only, synchronous, the same "no environment yet"
- * `storageUnavailable` answer `store list` gives (see that command's
- * identical branch and `../store/observers.ts`'s module comment). A
- * workspace that DOES declare backends merges the LMDB environment (if any)
- * with one `BoxObserverRedis` per backend.
  */
 async function buildStoragePanel(
   target: Pick<StoreTarget, 'workspaceName' | 'dataRootUrl' | 'workspaceDoc' | 'workspaceDocPath'>,
@@ -273,12 +262,9 @@ async function buildStoragePanel(
   try {
     const workflowListResult = await observerSet.listWorkflows();
     if (workflowListResult.isErr()) {
-      // Named so a workspace whose only problem IS an unreachable/
-      // unresolvable backend says why, rather than that reason getting
-      // silently dropped behind a generic "storage unavailable".
       return {
         storageUnavailable: workflowListResult.error,
-        warningList: observerSet.redisWarningList,
+        warningList: observerSet.backendWarningList,
       };
     }
 
@@ -293,11 +279,7 @@ async function buildStoragePanel(
         keyList: keysResult.value.map(buildStorageKey),
       });
     }
-    // Redis connection problems degrade the same way a rotted workflow
-    // document does elsewhere in this file: reported (via
-    // `storageWarningList`, wired in by the caller), never fatal to the rest
-    // of the snapshot.
-    return { storage, warningList: observerSet.redisWarningList };
+    return { storage, warningList: observerSet.backendWarningList };
   } finally {
     await observerSet.close();
   }
@@ -343,6 +325,8 @@ export async function buildWorkspaceStatusSnapshot(
     workflowList,
     storage: 'storage' in storagePart ? storagePart.storage : [],
     ...('storageUnavailable' in storagePart ? { storageUnavailable: storagePart.storageUnavailable } : {}),
-    ...(warningList !== undefined ? { storageWarningList: warningList } : {}),
+    ...(warningList !== undefined && warningList.length > 0
+      ? { storageWarningList: warningList }
+      : {}),
   };
 }

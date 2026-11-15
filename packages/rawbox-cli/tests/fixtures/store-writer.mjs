@@ -43,7 +43,17 @@ const rootDirectoryUrl = pathToFileURL(
   rootDirPath.endsWith('/') ? rootDirPath : `${rootDirPath}/`,
 );
 
-const store = BoxStoreLmdb.create(workspace, rootDirectoryUrl);
+// `create` returns a neverthrow `Result`. Checked explicitly rather than
+// unwrapped so an un-openable environment exits this child with the message
+// on stderr, which the parent test surfaces as "writer exited 1: ...".
+const storeResult = BoxStoreLmdb.create(workspace, rootDirectoryUrl);
+
+if (storeResult.isErr()) {
+  process.stderr.write(`${storeResult.error}\n`);
+  process.exit(1);
+}
+
+const store = storeResult.value;
 
 const location = {
   workspace,

@@ -96,9 +96,6 @@ export async function storeGetCommand(
   }
   const target = targetResult.value;
 
-  // Every LMDB-only workspace takes this branch, byte-for-byte unchanged from
-  // before Redis observation existed — see `store list`'s identical note and
-  // `../../store/observers.ts`'s module comment.
   if (!hasDeclaredBackends(target)) {
     const openResult = BoxObserverLmdb.openSync(target.workspaceName, target.dataRootUrl);
     if (openResult.isErr()) {
@@ -167,15 +164,10 @@ export async function storeGetCommand(
     return;
   }
 
-  // A `backends:` block is declared: merge the LMDB environment (if one
-  // exists) with one `BoxObserverRedis` per backend — see
-  // `../../store/observers.ts`.
   const observerSet = await openWorkspaceObserverSet(target);
 
   try {
-    // Printed before anything that might exit early below — see `store
-    // list`'s identical note.
-    for (const warning of observerSet.redisWarningList) {
+    for (const warning of observerSet.backendWarningList) {
       p.log.warn(pc.yellow(warning));
     }
 
@@ -203,14 +195,12 @@ export async function storeGetCommand(
 
     const resultList: GetResult[] = [];
     for (const entry of entryList) {
-      const isQueue = entry.strategy === 'lmdb-fifo' || entry.strategy === 'redis-fifo';
-
-      if (isQueue) {
+      if (entry.strategy === 'lmdb-fifo' || entry.strategy === 'pg-fifo') {
         const all = await observerSet.peekAll(entry, workflow, key);
         resultList.push({
           entry,
           elements: all.isOk() ? all.value : undefined,
-          value: undefined,
+          value: undefined as unknown,
           error: all.isErr() ? all.error : undefined,
         });
         continue;
@@ -238,7 +228,7 @@ interface GetResult {
   readonly error: string | undefined;
 }
 
-/** JSON/text rendering, shared by both the LMDB-only and the merged path so the two agree on output shape by construction. */
+/** Renders `store get` results as JSON or text. */
 function printGetResult(
   resultList: readonly GetResult[],
   workflow: string,

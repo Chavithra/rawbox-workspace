@@ -1,11 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { createActor } from 'xstate';
 import { ok, err, type Result } from 'neverthrow';
 import { Compile } from 'typebox/compile';
 import type { TLocalizedValidationError } from 'typebox/error';
-import { BoxStoreLmdb } from '@rawbox/store/box-store-lmdb';
 import { ContractRegistryCache } from '@rawbox/plugin/core';
 
 import { createWorkflowMachine } from '../machine/machine-instance.js';
@@ -15,6 +13,7 @@ import type { ResolvedWorkflow, Workflow } from '../workflow/workflow-types.js';
 import { RAWBOX_LOCK_FILENAME, RawboxLock } from '../workflow/lock-types.js';
 import { validateSeedData, validateWorkflowType } from '../workflow/validation.js';
 import { collectUnwiredStrategyProblems } from '../workflow/store-support.js';
+import { openWorkflowStore } from '../workflow/store-router.js';
 import { resolveWorkflow } from '../workflow/resolver.js';
 import {
   PluginDiscoverer,
@@ -105,12 +104,11 @@ async function readWorkspaceLock(
     return err(`Failed to read "${lockPath}": ${getErrorMessage(e)}`);
   }
 
-  let lockData: unknown;
-  try {
-    lockData = parseConfig(content, lockPath);
-  } catch (e) {
-    return err(`Failed to parse "${lockPath}": ${getErrorMessage(e)}`);
+  const parsed = parseConfig(content, lockPath);
+  if (parsed.isErr()) {
+    return err(parsed.error);
   }
+  const lockData: unknown = parsed.value;
 
   if (!lockValidator.Check(lockData)) {
     const errorDetails = Array.from(lockValidator.Errors(lockData))
@@ -441,6 +439,18 @@ export async function runWorkflowInstance(
       options?.preflightTimeoutMs,
       options?.seedOverrideLayerList ?? [],
     );
+  } catch (e) {
+    // The backstop. Every stage above answers with a `Result` and none is
+    // meant to throw, but a plugin's registry is third-party code crossing an
+    // `import()`, and a bug anywhere in the pipeline lands here too. This
+    // function's signature promises a `Result`, the README documents callers
+    // as needing only `isErr()`, and `@rawbox/cli` awaits it with no `catch`
+    // of its own — so a rejection here would be an unhandled one, after
+    // `run.start` may already have been logged. `end` is a no-op before
+    // `run.start` and closes the stream with the failure after it.
+    const message = `Workflow run failed unexpectedly: ${getErrorMessage(e)}`;
+    producer.end(OUTCOME.ERROR, { message });
+    return err(message);
   } finally {
     // Unconditional: a throw anywhere above still leaves the log files complete
     // and every sink shut down.
@@ -534,7 +544,11 @@ async function executeWorkflowRun(
   let authoredWorkflow: Workflow;
   try {
     const content = await fs.readFile(absoluteWorkflowPath, 'utf-8');
-    const workflowData = parseConfig(content, absoluteWorkflowPath);
+    const parsed = parseConfig(content, absoluteWorkflowPath);
+    if (parsed.isErr()) {
+      return failBootstrap(producer, BOOTSTRAP_STAGE.WORKFLOW, parsed.error);
+    }
+    const workflowData: unknown = parsed.value;
 
     // A file with no `kind:` is rejected here, by name, as not being a Rawbox
     // workflow document at all.
@@ -757,51 +771,39 @@ async function executeWorkflowRun(
     );
   }
 
-  // The LMDB data directory lives under the resolved target folder — the same
-  // `.rawbox/` a workspace's installed plugins land in by default — not beside
-  // `workspace.yaml` directly. No legacy fallback: an existing
-  // `<workspaceDir>/data` from an older checkout is simply not consulted.
-  const dbDirUrl = pathToFileURL(path.join(resolvedTargetFolder, 'data'));
-  const boxStoreLmdb = BoxStoreLmdb.create(workspace.name, dbDirUrl);
+  const openedStoreResult = await openWorkflowStore({
+    authoredWorkflow,
+    resolvedWorkflow: workflow,
+    workspace,
+    workspaceLabel,
+    workflowLabel: absoluteWorkflowPath,
+    resolvedTargetFolder,
+  });
 
-  // Seed the database if seedData is present.
-  //
-  // One `putSync` per `Seed`, with no strategy special case: the resolver has
-  // already expanded each `lmdb-fifo` seed into one `Seed` per list element, so
-  // `put` here means "overwrite" on `lmdb-kv` and "enqueue one entry" on
-  // `lmdb-fifo` — exactly what it means everywhere else.
-  // The list order is the enqueue order.
-  //
-  // The whole pass reports as a single `storage.seed` event: it is one
-  // transaction, so per-seed events would advertise a granularity it does not
-  // have (see `StorageSeedEvent`).
+  if (openedStoreResult.isErr()) {
+    return failBootstrap(producer, BOOTSTRAP_STAGE.STORE, openedStoreResult.error);
+  }
+
+  const { boxStore, close: closeStore } = openedStoreResult.value;
+
+  // Seed the database if seedData is present via a single atomic `transact()`.
   const seedList = workflow.seedData;
   if (seedList && seedList.length > 0) {
     const seedStartedAtMs = Date.now();
-    // Awaited at the boundary only. The callback stays synchronous —
-    // `putSync`, not `put` — because `BoxStoreLmdb.transaction` runs it inside
-    // `transactionSync`; see that method's doc comment for why an `await`
-    // inside would commit an empty transaction and pin an MVCC snapshot. The
-    // `await` here is what lets a future async store back this same loop.
-    const seedResult = await boxStoreLmdb.transaction((boxStore) => {
-      for (const seed of seedList) {
-        const putRes = boxStore.putSync({
-          content: seed.value,
-          location: {
-            key: seed.key,
-            workflow: workflow.name,
-            workspace: workspace.name,
-            strategy: seed.strategy,
-          },
-        });
-        if (putRes.isErr()) {
-          return err(`Failed to write seed data for key "${seed.key}": ${putRes.error}`);
-        }
-      }
-      return ok(undefined);
+    const seedResult = await boxStore.transact({
+      puts: seedList.map((seed) => ({
+        content: seed.value,
+        location: {
+          key: seed.key,
+          workflow: workflow.name,
+          workspace: workspace.name,
+          strategy: seed.strategy,
+        },
+      })),
     });
 
     if (seedResult.isErr()) {
+      await closeStore();
       return failBootstrap(
         producer,
         BOOTSTRAP_STAGE.SEED,
@@ -821,12 +823,13 @@ async function executeWorkflowRun(
   // machine — and therefore any step — never starts. The run concludes with
   // an interrupted `run.end` reporting zero step executions.
   if (signal?.aborted) {
+    await closeStore();
     producer.end(OUTCOME.INTERRUPTED);
     return ok({ outcome: OUTCOME.INTERRUPTED });
   }
 
   const machine = createWorkflowMachine(
-    boxStoreLmdb,
+    boxStore,
     contractRegistryCache,
     preflightTimeoutMs,
   );
@@ -840,7 +843,7 @@ async function executeWorkflowRun(
       todoStep: { index: 0 },
       doneStep: null,
     },
-    boxStoreLmdb,
+    boxStore,
   };
 
   const actor = createActor(machine, { input });
@@ -962,5 +965,6 @@ async function executeWorkflowRun(
       signal.removeEventListener('abort', onAbort);
     }
     producer.uninstallLogChannel();
+    await closeStore();
   }
 }

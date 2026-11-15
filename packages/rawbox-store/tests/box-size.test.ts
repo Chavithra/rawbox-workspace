@@ -91,7 +91,7 @@ describe('box-size', () => {
       import.meta.url,
     );
     await fs.mkdir(fileURLToPath(dbDirUrl), { recursive: true });
-    store = BoxStoreLmdb.create(workspace, dbDirUrl);
+    store = BoxStoreLmdb.create(workspace, dbDirUrl)._unsafeUnwrap();
     dbi = store.dbiCache.getOrCreateDbi(workflow)._unsafeUnwrap();
     dataFilePath = fileURLToPath(new URL(`./${workspace}/data.mdb`, dbDirUrl));
   });

@@ -1,6 +1,6 @@
 {
   "name": "rawbox-workspace",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "main": "index.js",
   "scripts": {
     "build:all": "tsc --build && npm run build --workspace @rawbox/cli",
@@ -22,6 +22,7 @@
     "@eslint/js": "^10.0.1",
     "eslint": "^10.8.0",
     "globals": "^17.8.0",
+    "semver": "^7.8.5",
     "typescript-eslint": "^8.65.0"
   }
 }

@@ -14,8 +14,8 @@ import { fifoDataKey, ringCapacity } from '../box-store/fifo-ring.js';
 import {
   LmdbFIFO,
   LmdbKV,
-  RedisFIFO,
-  RedisKV,
+  PgFIFO,
+  PgKV,
   type BoxStrategy,
 } from '../box.js';
 
@@ -46,15 +46,14 @@ import {
 // ## Why capability fields rather than a kind × backend taxonomy
 //
 // The obvious factorisation of `lmdb-kv` / `lmdb-fifo` is a `kind` ('kv' |
-// 'fifo') crossed with a `backend` ('lmdb' | 'redis'), and it was considered and
-// **rejected**. Two reasons, in order of weight:
+// 'fifo') crossed with a `backend` (e.g. 'lmdb' | 'remote'), and it was
+// considered and **rejected**. Two reasons, in order of weight:
 //
-//   - **The 2×2 is a coincidence of today's set, not a structure.** It survives
-//     `redis-kv` and `redis-fifo` and breaks on the fifth strategy: a
-//     `redis-stream` is not a FIFO with a different backend, a `sqlite-kv`'s
-//     budget has no page model to share with `lmdb-kv`, and a sorted set is
-//     neither cell nor queue. A taxonomy that has to be re-cut on the next
-//     addition is a worse hand-kept list than no taxonomy at all.
+//   - **The 2×2 is a coincidence of a small set, not a structure.** A stream
+//     is not a FIFO with a different backend, a `sqlite-kv`'s budget has no
+//     page model to share with `lmdb-kv`, and a sorted set is neither cell nor
+//     queue. A taxonomy that has to be re-cut on the next addition is a worse
+//     hand-kept list than no taxonomy at all.
 //   - **No branch site actually asks the taxonomy's question.** Re-reading the
 //     real call sites, none of them asks "is this a queue": `resolver.ts` asks
 //     *does a seed expand into one write per element*; `validation.ts` asks
@@ -90,17 +89,17 @@ import {
  * `id` is an **opaque identity**, compared only for equality and never parsed,
  * split or matched on a prefix. That is the whole discipline of this type:
  * "same store" is a fact about the concrete store a strategy names, not about
- * the *kind* of storage it uses. A `backend: 'redis'` category would report two
- * `redis-kv` keys pointed at two different servers as compatible, and they are
- * not co-transactional — nothing spans two Redis servers. See the "no kind ×
+ * the *kind* of storage it uses. A `backend` category would report two keys
+ * pointed at two different servers as compatible, and they are not
+ * co-transactional — nothing spans two separate servers. See the "no kind ×
  * backend taxonomy" section above; this field is that decision applied to the
  * one question a category could have plausibly answered.
  *
  * `description` is what a diagnostic prints. It has to be actionable prose
  * rather than the id, because an author told that `lmdb:workspace` and
- * `redis:cache` differ has learnt nothing they can act on, whereas "the
- * workspace's LMDB environment" and `the Redis server named by backend:
- * "cache"` name the two things and point at the field that chose each.
+ * `remote:cache` differ has learnt nothing they can act on, whereas "the
+ * workspace's LMDB environment" and `the backend store named "cache"` name the
+ * two things and point at the field that chose each.
  */
 export interface StoreIdentity {
   /**
@@ -133,35 +132,13 @@ const LMDB_WORKSPACE_STORE: StoreIdentity = {
 };
 
 /**
- * The Redis server one `backend:` id names, shared by **every** Redis strategy
- * pointed at that id.
- *
- * The Redis counterpart of {@link LMDB_WORKSPACE_STORE}, and a function rather
- * than a constant for the reason stated on
- * {@link StrategyDescriptor.storeIdentity}: which store a Redis strategy
- * addresses is chosen by its own `backend:` field, so two blocks with the same
- * `name` are two stores whenever those ids differ.
- *
- * **Why the two Redis rows call this instead of each building the object.**
- * `redis-kv` on backend `X` and `redis-fifo` on backend `X` are the SAME store —
- * one server, one `MULTI`, one Lua scope — exactly as `lmdb-kv` and `lmdb-fifo`
- * are one environment. A document holding a Redis cell beside a Redis queue on
- * one server is legal and co-transactional, and the check in `@rawbox/runner`'s
- * `workflow/validation.ts` compares ids for equality and nothing else. Two rows
- * writing the id out separately could drift into `redis:X` and
- * `redis-fifo:X` — spellings that look deliberate, compare unequal, and would
- * reject that legal document at verify time with a message insisting two keys on
- * one server are two stores. One function is what makes that unrepresentable,
- * the same discipline and the same failure mode as the LMDB constant above.
- *
- * The id remains derived from the *id*, never from a resolved connection string:
- * see the `redis-kv` row for why two ids that happen to point at one server are
- * still reported as two stores.
+ * The PostgreSQL database one `backend:` id names, shared by all PostgreSQL
+ * strategies pointed at that id (`pg-kv` and `pg-fifo`).
  */
-function redisBackendStore(backend: string): StoreIdentity {
+function pgBackendStore(backend: string): StoreIdentity {
   return {
-    id: `redis:${backend}`,
-    description: `the Redis server named by backend: ${JSON.stringify(backend)}`,
+    id: `pg:${backend}`,
+    description: `the PostgreSQL database named by backend: ${JSON.stringify(backend)}`,
   };
 }
 
@@ -206,14 +183,14 @@ export interface StrategyDescriptor<S extends BoxStrategy> {
    * so there is no count to bound.
    *
    * **A function per strategy, not `queueSizeMax - 1` written into the
-   * verifier**, and the two queue strategies are why. For `lmdb-fifo` this is
-   * the ring's usable capacity, `queueSizeMax - 1`: one slot is permanently
-   * reserved so `head === tail` can mean *empty* rather than *full*. For
-   * `redis-fifo` it is `queueSizeMax` exactly, because a native list has no
-   * cursors to disambiguate and so reserves nothing. A subtraction hardcoded at
-   * the one call site would have been right for the first queue strategy and
-   * silently wrong for the second — it would refuse a legal full-capacity seed
-   * and tell the author to raise a ceiling that was already high enough.
+   * verifier.** For `lmdb-fifo` this is the ring's usable capacity,
+   * `queueSizeMax - 1`: one slot is permanently reserved so `head === tail` can
+   * mean *empty* rather than *full*. A future queue strategy backed by a native
+   * list rather than a cursor ring has no cursors to disambiguate and so
+   * reserves nothing, making its capacity `queueSizeMax` exactly. A subtraction
+   * hardcoded at the call site would be right for `lmdb-fifo` and silently
+   * wrong for a non-ring queue — it would refuse a legal full-capacity seed and
+   * tell the author to raise a ceiling that was already high enough.
    *
    * Absent means unbounded, not unknown. A queue with no declared ceiling would
    * omit this rather than return `Infinity`, and the diagnostic that consumes it
@@ -234,20 +211,19 @@ export interface StrategyDescriptor<S extends BoxStrategy> {
    * baffling ("holds 3 entries — its queueSizeMax is 4" reads like a bug unless
    * the reader is told a slot is spoken for).
    *
-   * Before `redis-fifo` existed the explanation was a literal in that function,
-   * reached through a parameter narrowed to `lmdb-fifo`. That was true then and
-   * became **false** the moment a second queue strategy joined: a Redis list
+   * Keeping this explanation next to the strategy rather than hardcoded in
+   * `checkFifoSeedLength` ensures it only appears for queue strategies that
+   * actually reserve a slot: a future queue strategy with no reserved slot
    * reserves nothing, and printing "one slot is permanently reserved to
-   * distinguish a full queue from an empty one" over a `redis-fifo` seed would
-   * be the verifier stating, in the author's own diagnostic, a fact about their
-   * queue that is not true — and sending them to raise `queueSizeMax` by one
-   * more than they need. So the explanation moved next to the strategy it
-   * explains, and a strategy with nothing to explain declares nothing.
+   * distinguish a full queue from an empty one" over its seed would be false —
+   * and would send an author to raise `queueSizeMax` by one more than they
+   * need. So the explanation lives on the strategy it explains, and a strategy
+   * with nothing to explain declares nothing.
    *
    * The gap and the note must agree: a strategy whose capacity equals its
    * ceiling and yet declares a note would print a reason for a shortfall that
    * does not exist. That pairing is asserted per row in
-   * `tests/strategy-descriptor.test.ts` rather than assumed, because it is an
+   * `tests/strategy/descriptor.test.ts` rather than assumed, because it is an
    * invariant between a number and a sentence and no type can hold it.
    */
   readonly seedCapacityNote?: string;
@@ -301,10 +277,10 @@ export interface StrategyDescriptor<S extends BoxStrategy> {
    * table is keyed by `BoxStrategy['name']`, so a strategy joining the union is
    * a compile error here until it says which store it addresses.
    *
-   * A function of the strategy rather than a constant field, because the store
-   * is frequently *chosen by the strategy's own fields*: `redis-kv`'s store is
-   * whichever server its `backend:` id names, so two blocks with the same
-   * `name` are two stores whenever those ids differ.
+   * A function of the strategy rather than a constant field, because for a
+   * future non-LMDB strategy the store may be *chosen by the strategy's own
+   * fields* (for example, a server or endpoint selector), so two blocks with
+   * the same `name` can address two different stores when those fields differ.
    *
    * Consumed by the co-transactional check in `@rawbox/runner`'s
    * `workflow/validation.ts`: one step's outputs are written and the next
@@ -380,8 +356,8 @@ const STRATEGY_DESCRIPTOR_TABLE: StrategyDescriptorTable = {
     // one rule, and `box-peek.ts` is where it is stated.
     seedCapacity: (strategy) => ringCapacity(strategy.queueSizeMax),
     // The sentence that explains the `- 1` above, in the author's diagnostic.
-    // It lives here rather than in the verifier because it is true of THIS
-    // ring and of no other queue strategy — `redis-fifo` declares no note at
+    // It lives here rather than in the verifier because it is specific to THIS
+    // ring strategy — a future non-ring queue strategy would declare no note at
     // all. Byte-identical to the clause `checkFifoSeedLength` used to hold as a
     // literal, because `@rawbox/runner`'s `validation.test.ts` asserts this
     // wording and moving the string must not reword it.
@@ -404,180 +380,22 @@ const STRATEGY_DESCRIPTOR_TABLE: StrategyDescriptorTable = {
     keySizeMax: (key, strategy) =>
       measureKeySize(fifoDataKey(key, strategy.queueSizeMax - 1)),
   },
-  'redis-kv': {
-    name: 'redis-kv',
-    schema: RedisKV,
-    // A cell's seed is the value, stored as written — the same answer
-    // `lmdb-kv` gives, and for the same reason: writes overwrite rather than
-    // append, so one authored entry is one write
-    // (`@rawbox/runner`'s FORMAT.md, "`seed`", which states the rule over the
-    // *behaviour* — "for a strategy whose writes append" — rather than over the
-    // name, so a strategy added later is bound by whichever half of that
-    // sentence describes it).
+  'pg-kv': {
+    name: 'pg-kv',
+    schema: PgKV,
     seedExpandsList: false,
-    // No `seedCapacity`: one value has no count to bound.
-    //
-    // **Verbatim the same sentence as `lmdb-kv`, and deliberately so.**
-    // Every strategy must declare the exact sentence its empty read fails with,
-    // and the verifier quotes it back to the author. A cell that was never
-    // written is a cell that is missing, whatever holds it — the author's
-    // mistake and the author's fix are identical on both backends, so giving
-    // the two cells different wording would be inventing a distinction the
-    // reader has no use for. A strategy may reuse another's sentence, and doing
-    // so binds it to producing that string exactly: the
-    // Redis store, when it lands, MUST fail an unset key with this text and not
-    // with whatever its client library says.
     emptyReadMessage: 'Value not found',
     hasDepth: false,
-    // **No `budget`, and that absence is the declaration.** A Redis key's bytes
-    // are bounded by the server's `maxmemory`, its eviction policy and whoever
-    // operates it — none of which is written in, or derivable from, a
-    // `storage:` block. There is no page model here to reuse and no honest
-    // figure to invent, so this strategy states that it has none — a strategy
-    // need not be provisionable from the document, and saying so is the honest
-    // answer. `budgetForKey` turns the absence into an
-    // `UnbudgetableKey` that still names the key, so a report says "not
-    // applicable" and says the totals cover fewer keys than the document
-    // declares — never `0`, which would be summed and would read as "this key
-    // costs nothing".
-    //
-    // This is the first strategy to exercise that path through a real document.
-    // The path is not new; the reachability is.
-    //
-    // **The store is the server, so the identity is the `backend:` id.** Two
-    // `redis-kv` blocks are one store only when they name the same entry of the
-    // workspace's `backends:` map; naming two entries is two servers, and
-    // nothing spans two servers — no `MULTI`, no Lua script, no transaction.
-    // This is exactly where a `backend: 'redis'` *category* would have given the
-    // wrong answer, calling two servers one store, and it is why the
-    // discriminator is identity rather than kind (see the header above). A
-    // `kind` × `backend` taxonomy was rejected for the same reason: the 2×2 is
-    // a coincidence of today's strategy set rather than a structure, and it
-    // breaks on the fifth member — a `redis-stream` is not a FIFO with a
-    // different backend, a sorted set is neither cell nor queue, and a
-    // `sqlite-kv` budget shares no page model with `lmdb-kv`.
-    //
-    // The id is *not* the connection string: a `backends:` entry is resolved
-    // against the workspace document, which a workflow can be shape-verified
-    // without (`box.ts`, `RedisKV`). Two ids that happen to point at one server
-    // are therefore reported as two stores. That is the conservative direction —
-    // it asks the author to say which one they meant, rather than accepting a
-    // document whose transactions depend on two `backends:` entries staying in
-    // agreement forever.
-    //
-    // Built through {@link redisBackendStore} rather than inline, so this row
-    // and `redis-fifo`'s cannot drift into two ids for one server — see that
-    // function for why a Redis cell beside a Redis queue on one backend MUST
-    // compare equal.
-    storeIdentity: (strategy) => redisBackendStore(strategy.backend),
-    //
-    // `valueSizeMax` is still declared and still enforced per write: it bounds
-    // ONE value, measured as the msgpack encoding, which is the format's
-    // measurement rather than a backend's — the packed length of the value,
-    // computable with no database open at all, so any strategy on any backend
-    // can state and enforce exactly this bound. Bounding one value and
-    // bounding the store are separate questions, and this strategy answers the
-    // first and declines the second.
-    //
-    // Redis stores the author's key with no derivation at all — no `fifo:` shape,
-    // no index suffix — so the widest key this declaration produces is the key
-    // itself, exactly as for `lmdb-kv`. Declared rather than omitted because
-    // omission means "there is no such quantity", and here there is one and it is
-    // known; the unknown quantity is the byte footprint, and that is what the
-    // absent `budget` above says. Keeping the two answers distinct is what stops
-    // `budget: absent` from degrading into "this strategy is a stranger, assume
-    // nothing".
-    keySizeMax: (key) => measureKeySize(key),
+    storeIdentity: (strategy) => pgBackendStore(strategy.backend),
   },
-  'redis-fifo': {
-    name: 'redis-fifo',
-    schema: RedisFIFO,
-    // A queue's seed is its initial contents, one entry per element — the same
-    // answer `lmdb-fifo` gives, and again for the *behaviour* rather than the
-    // name: a write to this key appends (`RPUSH`) rather than overwrites, and
-    // the seed rule is written over exactly that (`@rawbox/runner`'s FORMAT.md,
-    // "`seed`").
+  'pg-fifo': {
+    name: 'pg-fifo',
+    schema: PgFIFO,
     seedExpandsList: true,
-    // **The identity, not `ringCapacity`** — this is the one row that exists to
-    // say so. A Redis list has no head/tail cursors to disambiguate: `LLEN`
-    // reports the depth outright and an empty list is a key that does not
-    // exist, so nothing has to be kept free to tell a full queue from an empty
-    // one. `queueSizeMax: 8` therefore holds 8, where `lmdb-fifo`'s holds 7
-    // (`box-store/fifo-ring.ts`, `ringCapacity`).
-    //
-    // Routing this through `ringCapacity` would have cost the author a usable
-    // entry per queue and, worse, produced a diagnostic telling them to raise a
-    // ceiling that already fit. This divergence is why `seedCapacity` is a
-    // function on the descriptor at all.
     seedCapacity: (strategy) => strategy.queueSizeMax,
-    // **No `seedCapacityNote`, and the absence is the declaration.** Capacity
-    // IS the declared ceiling here, so there is no shortfall to explain, and
-    // the seed-length diagnostic prints "its queueSizeMax is 8." with no
-    // reserved-slot clause — see that field's doc comment for why the
-    // explanation had to move out of the verifier when this row landed.
-    //
-    // **Verbatim the sentence `lmdb-fifo` declares, deliberately.** Every
-    // strategy must declare the exact sentence its empty read fails with, and
-    // declaring it binds the store to producing that string; a queue with
-    // nothing in it is a queue with nothing in it, whichever server holds it,
-    // and the author's mistake and fix are identical on both. The same
-    // reasoning that gives the two *cells* one sentence, applied to the two
-    // queues. The Redis store, when it lands (task #15), MUST fail an
-    // `LPOP` that returns nil with this text and not with a client-library
-    // message.
     emptyReadMessage: 'Queue empty',
-    // A queue has a depth, and here it is `LLEN` — one command, no cursor
-    // arithmetic. `{used, capacity}` means exactly what it means for
-    // `lmdb-fifo`, except that `capacity` is `queueSizeMax` unreduced.
     hasDepth: true,
-    // **No `budget`, the same absence and the same reason as `redis-kv`.** A
-    // Redis list's bytes are bounded by the server's `maxmemory`, its eviction
-    // policy and whoever operates it — none of it written in, or derivable
-    // from, a `storage:` block. `queueSizeMax ×
-    // valueSizeMax` would look like an honest figure and is not one: it models
-    // no encoding overhead this package can see, no per-element list overhead,
-    // and no server-side allocator, and once summed into a total it would read
-    // as a provisioning number somebody measured. `budgetForKey` turns the
-    // absence into an `UnbudgetableKey` that still NAMES the key, so a report
-    // says the totals cover fewer keys than the document declares.
-    //
-    // The same server `redis-kv` addresses when the `backend:` ids match, and
-    // built through the same function so it cannot be otherwise. This is the
-    // pairing most likely to be got wrong: a Redis cell and a Redis queue on
-    // one server are ONE store — one connection, one `MULTI`, one Lua scope —
-    // exactly as `lmdb-kv` and `lmdb-fifo` are one environment, and a document
-    // mixing them is legal. An id spelled per strategy would reject it at
-    // verify time (`redisBackendStore`, and `tests/strategy-descriptor.test.ts`
-    // which asserts the pairing directly).
-    storeIdentity: (strategy) => redisBackendStore(strategy.backend),
-    // **The author's key, unwidened — a native list derives nothing.**
-    //
-    // The contrast with `lmdb-fifo` is the whole answer. That strategy's ring
-    // needs `fifo:<key>:data:<n>`, `:head` and `:tail` because LMDB gives it
-    // one flat, *untyped* keyspace per workflow: several physical entries per
-    // logical queue, and a naming convention is the only thing that can tell a
-    // queue's bytes from a cell's. Redis needs neither half. One list is one
-    // key, and a Redis key carries its type intrinsically — `TYPE` distinguishes
-    // a list from a string with no help from the name — so the two reasons the
-    // `fifo:` prefix exists both vanish here.
-    //
-    // The consequence for task #15, stated so it is inherited rather than
-    // rediscovered: a `redis-fifo` box occupies the SAME physical key a
-    // `redis-kv` box of that name would, `rawbox:<workspace>:<workflow>:<key>`
-    // (`box-store/box-store-redis.ts`, `redisKeyFor`). Within one workflow that
-    // cannot collide — a key resolves to exactly one strategy — but a key whose
-    // strategy is *changed* from `redis-kv` to `redis-fifo` between runs will
-    // meet a string where it expects a list, and Redis will answer `WRONGTYPE`.
-    // That is the wanted behaviour and must be translated into a named
-    // diagnostic, not designed away: a `fifo:` marker would instead start a
-    // silent empty queue beside the author's abandoned data, which is the
-    // failure mode this codebase refuses everywhere else.
-    //
-    // Declared rather than omitted for the same reason as `redis-kv`: omission
-    // means "there is no such quantity", and here it is known and equals the
-    // author's key. The unknown quantity is the byte footprint, and that is
-    // what the absent `budget` above says.
-    keySizeMax: (key) => measureKeySize(key),
+    storeIdentity: (strategy) => pgBackendStore(strategy.backend),
   },
 };
 

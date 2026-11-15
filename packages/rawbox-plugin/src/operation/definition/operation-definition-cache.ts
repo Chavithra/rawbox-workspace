@@ -1,3 +1,5 @@
+import { err } from 'neverthrow';
+
 import { type OperationContract } from '../contract/operation-contract-types.js';
 import { operationContractGuard } from '../contract/operation-contract-utils.js';
 import { OperationDefinition } from './operation-definition.js';
@@ -80,8 +82,13 @@ export class OperationDynamicCaller<
 
       return await validatedHandler(input);
     }
-    throw new Error(
-      `Failed to load operation definition from path "${definitionPath}": ${resultOfLoadOperationDefinition.error}`,
+    // An `Err`, never a throw: the signature promises a `ValidatedResult`, whose
+    // error channel is an `Error`, and a definition that cannot be loaded is
+    // exactly what that channel is for.
+    return err(
+      new Error(
+        `Failed to load operation definition from path "${definitionPath}": ${resultOfLoadOperationDefinition.error}`,
+      ),
     );
   }
 }

@@ -111,6 +111,11 @@ function renderText(snapshot: WorkspaceStatusSnapshot): string {
 
   lineList.push('');
   lineList.push(pc.bold('STORAGE'));
+  if (snapshot.storageWarningList !== undefined && snapshot.storageWarningList.length > 0) {
+    for (const warning of snapshot.storageWarningList) {
+      lineList.push(pc.yellow(`  warning: ${warning}`));
+    }
+  }
   if (snapshot.storageUnavailable !== undefined) {
     lineList.push(`  (no storage state yet: ${snapshot.storageUnavailable})`);
   } else if (snapshot.storage.length === 0) {

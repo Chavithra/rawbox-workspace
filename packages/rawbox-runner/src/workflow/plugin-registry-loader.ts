@@ -74,13 +74,23 @@ export type PluginRegistryLoadFailure =
       registryPath?: string;
       cause: string;
     } & TypeboxVersionNote)
-  /** The module imported but carries no registry. */
+  /**
+   * The module imported but carries no registry — no default export with an
+   * object `contractRecord`, or one whose contracts cannot be hashed.
+   */
   | ({
       kind: 'not-a-registry';
       packageName: string;
       specifier: string;
       /** Absent when the bare-specifier fallback was what got imported. */
       registryPath?: string;
+      /**
+       * Present when the shape was right but hashing it threw: `contractRecord`
+       * is serialised to compute the registry's identity, and a `BigInt` or a
+       * cycle inside a contract makes that impossible. Absent for the plain
+       * wrong-shape case, which needs no further explanation.
+       */
+      cause?: string;
     } & TypeboxVersionNote);
 
 /**
@@ -167,10 +177,15 @@ function pickRegistry(module: unknown): ContractRegistry<Contract> | undefined {
   ];
 
   for (const candidate of candidates) {
+    // The record itself must be an object: `{ contractRecord: null }` has the
+    // key and would pass `in`, only to throw from `Object.keys` inside the
+    // hash — past the guard, out of a `Result`-returning function.
     if (
       typeof candidate === 'object' &&
       candidate !== null &&
-      'contractRecord' in candidate
+      'contractRecord' in candidate &&
+      typeof (candidate as { contractRecord: unknown }).contractRecord === 'object' &&
+      (candidate as { contractRecord: unknown }).contractRecord !== null
     ) {
       return candidate as ContractRegistry<Contract>;
     }
@@ -319,9 +334,28 @@ export async function loadPluginContractRegistry(
     });
   }
 
-  const registryHash = options.registryCache
-    ? options.registryCache.addContractRegistry(registry)
-    : ContractRegistryCache.computeHash(registry);
+  // Hashing serialises every contract (`JSON.stringify` in `computeHash`),
+  // and the registry is third-party data that just crossed `import()`: a
+  // `BigInt` or a self-reference inside a contract throws here. The event
+  // sinks guard the same hazard on their own path (`otel-sink.ts`,
+  // `ndjson-file-sink.ts`); this is the registry path's guard. An `Err`,
+  // never a throw — every caller up to `runWorkflowInstance` declares a
+  // `Result`, and none of them catches.
+  let registryHash: string;
+  try {
+    registryHash = options.registryCache
+      ? options.registryCache.addContractRegistry(registry)
+      : ContractRegistryCache.computeHash(registry);
+  } catch (error) {
+    return err({
+      kind: 'not-a-registry',
+      packageName,
+      specifier,
+      ...(registryPath === undefined ? {} : { registryPath }),
+      ...(typeboxVersionNote === undefined ? {} : { typeboxVersionNote }),
+      cause: `its contractRecord could not be hashed: ${getErrorMessage(error)}`,
+    });
+  }
 
   return ok({
     packageName,

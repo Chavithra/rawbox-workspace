@@ -9,10 +9,10 @@ import { StrictObject } from '@rawbox/store';
 // ## Why this is on the workspace and not on the strategy
 //
 // A strategy block is declared **per key** (FORMAT.md, "`storage`"): a
-// `redis-kv` key that carried its own connection string would repeat one
+// remote-backend key that carried its own connection string would repeat one
 // server's address once per key, with nothing keeping the copies in agreement,
 // and a document with twenty keys would have twenty places to edit when the
-// server moves. Worse, a workflow document is **committed**, and a Redis URL
+// server moves. Worse, a workflow document is **committed**, and a backend URL
 // routinely carries a password — so the repeated thing would be a secret.
 //
 // A workspace is defined as ONE storage environment (root README, "How It
@@ -24,7 +24,7 @@ import { StrictObject } from '@rawbox/store';
 //
 // ## The consequence, stated rather than discovered
 //
-// A workflow declaring `redis-kv` can still be **shape**-verified standing
+// A workflow declaring a remote strategy can still be **shape**-verified standing
 // alone: the strategy schema, the strategy-field diagnostics
 // (`workflow/validation.ts`) and the seed rules all read the workflow document
 // and nothing else. It cannot be **connection**-verified without its workspace,
@@ -40,13 +40,13 @@ import { StrictObject } from '@rawbox/store';
 //
 // ## Credentials come from the environment
 //
-// The document holds a *shape* — `redis://cache.internal:6379/${REDIS_PASSWORD}`
+// The document holds a *shape* — `tcp://store.internal:9000/${BACKEND_PASSWORD}`
 // — and the process environment holds the secret. {@link
 // interpolateEnvReferences} substitutes, and refuses to substitute an unset or
 // empty variable. That refusal is the whole point of the module: the failure
 // being designed out is a run that silently connects to `localhost` (or to a
 // URL with an empty password field, which some clients accept) because
-// `$REDIS_URL` expanded to nothing. A wrong store that answers is far worse
+// `$BACKEND_URL` expanded to nothing. A wrong store that answers is far worse
 // than a store that will not open, so an unset variable is a **verify-time
 // error naming the variable and the backend id**, never a default.
 // ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ export type BackendMap = Static<typeof BackendMap>;
  *
  * Braces are required rather than optional (`$NAME` is **not** a reference).
  * A connection string is a URL, and a URL's password field may legitimately
- * contain a `$`; a bare-word form would make `redis://u:pa$$w0rd@h:6379`
+ * contain a `$`; a bare-word form would make `tcp://u:pa$$w0rd@h:9000`
  * ambiguous between a literal password and two undefined variables, and the
  * ambiguity would resolve in the dangerous direction — silently, into an empty
  * password. The braces make a reference something the author typed on purpose.
@@ -149,7 +149,7 @@ export interface UnsetEnvReference {
  *
  * **An unset or empty variable is an error, never a substitution.** A variable
  * that expanded to the empty string would produce a connection string that is
- * still syntactically a URL — `redis://:@localhost:6379` — which a client will
+ * still syntactically a URL — `tcp://:@localhost:9000` — which a client will
  * happily open against the wrong server. The whole failure this module exists
  * to prevent is a run that connects somewhere plausible instead of failing, so
  * there is no default, no fallback and no warning-and-continue.
@@ -204,7 +204,7 @@ export function interpolateEnvReferences(
  * broken, since a workspace may declare several) and the **document path**
  * (`backends.<id>.connection`, so the author can go straight to the line), and
  * it says explicitly that there is no default — because the reasonable guess on
- * seeing "REDIS_URL is not set" is that something sensible happens anyway, and
+ * seeing "BACKEND_URL is not set" is that something sensible happens anyway, and
  * that guess is what this whole check exists to contradict.
  */
 function describeUnsetEnvReference(parameters: {
@@ -251,7 +251,7 @@ function describeUnsetEnvReference(parameters: {
  *   declared-but-unresolvable backend is broken whether or not a workflow
  *   happens to reference it today.
  * - `workflow verify` passes the ids **this workflow references**. A workflow
- *   that touches no Redis at all must not fail because the workspace also
+ *   that touches no remote backend at all must not fail because the workspace also
  *   declares a `prod` backend whose password this developer does not hold.
  *
  * Each command checks the document it is verifying. Checking every backend from
@@ -336,8 +336,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * **Completeness is over declaration SITES as well as over strategies**, and
  * that half was missed once. This function read the then-existing
  * `storage.strategies` alone, which was complete while it was the only per-key
- * home for a strategy; `keys:` added a second, and a `redis-*` declared there
- * had its `backend:` id checked by nothing — neither the unknown-id rule nor
+ * home for a strategy; `keys:` added a second, and a remote strategy declared
+ * there had its `backend:` id checked by nothing — neither the unknown-id rule nor
  * the unset-variable rule — so a typo'd id or an unset `${VAR}` verified clean
  * and failed at connect time, or worse, connected somewhere unintended. The
  * shorthand has since been removed and the sites are back down to two, but the
@@ -416,7 +416,7 @@ function describeUnknownBackend(parameters: {
       `than in the document:\n` +
       `    backends:\n` +
       `      ${reference.backendId}:\n` +
-      `        connection: \${REDIS_URL}\n` +
+      `        connection: \${BACKEND_URL}\n` +
       `  A strategy's "backend:" is an id into that map, never a connection string ` +
       `— one workspace is one storage environment, so the address is stated once ` +
       `there rather than once per key.`
@@ -488,8 +488,8 @@ export function collectUnknownBackendProblems(parameters: {
  * so a reader who sees it at run time sees a message they can act on rather
  * than a second, terser wording of the same problem.
  *
- * Nothing calls this yet — the Redis store is not implemented in this version
- * (see `workflow/store-support.ts`, which is what refuses such a run). It is
+ * Nothing calls this yet — no remote store is wired in this version
+ * (see `workflow/store-support.ts`, which is what refuses an unwired strategy). It is
  * defined here, next to the diagnostics it shares its wording with, so that the
  * store which does connect reads the map through one function rather than
  * reaching into `Workspace.backends` itself.

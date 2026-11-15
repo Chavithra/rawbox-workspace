@@ -105,7 +105,7 @@ optional blocks are checked here because this is the document that holds them:
 - **`backends:`** — **every** declared entry, referenced by a workflow or not: a declared
   connection nobody can resolve is broken whether or not something reaches for it today. An
   unset or empty `${VARIABLE}` is an error naming the variable and the backend id, never an
-  empty substitution — `redis://:@localhost:6379` is a valid URL that opens a connection to
+  empty substitution — `tcp://:@localhost:9000` is a valid URL that opens a connection to
   the wrong server in silence.
 - **`seedOverrides:`** — every outer key must resolve to a path this workspace lists in
   `workflowPathList` (compared **resolved**, so `./workflows/a.yaml` and `workflows/./a.yaml`
@@ -144,7 +144,7 @@ key and per workflow, with each key labelled `declared` or `bound by a step`. Bo
 are reported, neither is enforced: they exist to size a volume or container before the run
 ([rawbox-store README §1.D](../rawbox-store/README.md#d-the-storage-budget)).
 `workspace verify` prints the same figures plus a workspace total. A key whose strategy
-declares no byte model — `redis-kv` and `redis-fifo` — is printed as **not applicable**
+declares no byte model is printed as **not applicable**
 rather than charged `0`, followed by one line saying how many keys the figures below exclude
 and naming them: a summed zero would read as "this key costs nothing" in a number an operator
 sizes a volume with.
@@ -398,14 +398,6 @@ rawbox-cli run workspaces/live-trading/workflows/example.workflow.yaml --seed sl
 rawbox-cli run workspaces/live-trading/workflows/example.workflow.yaml \
   --seed name='"Ada"' --seed queue_items='["a","b"]'
 ```
-
-> [!NOTE]
-> **A workflow can verify and still refuse to run.** `redis-kv` and `redis-fifo` are valid
-> strategies — the schema accepts them and `workflow verify` passes — but this version wires
-> no Redis store into the run path, so a run declaring one stops at bootstrap with a message
-> naming the strategy, where it was declared, and the strategies that do run. Nothing is
-> written and nothing falls back to LMDB
-> ([runner README §2.3](../rawbox-runner/README.md#23-storage-rules-a-schema-cannot-express)).
 
 **Terminal output (`--output`, `-v`).** The run-event stream — the same typed events the
 NDJSON log receives — has a second consumer: a terminal renderer
@@ -730,18 +722,7 @@ observers (see
 read-write database lifecycle — peeking at a workflow with no database yet *creates* the
 (empty) database. `BoxObserverLmdb` opens `readOnly: true` and cannot write at all, so
 pointing it at a workspace that has never run is an error rather than a side effect. Every
-`store` command uses an observer exclusively.
-
-**A workspace declaring `backends:` is read from more than one place.** `BoxObserver` (LMDB,
-synchronous) and `BoxObserverAsync` (Redis) are deliberately two different interfaces, so
-these commands open one of each kind — the LMDB environment, plus one `BoxObserverRedis` per
-entry of the workspace document's `backends:` map — and merge the results
-(`src/store/observers.ts`). No new flag is involved: the backends come from the document.
-A backend whose
-connection cannot be resolved (an unset `${VARIABLE}`) or reached (server down) is reported as
-a **warning and excluded from the merge** rather than failing the command — a workspace with a
-live LMDB environment and one unreachable Redis server should still show what it can. A
-workspace with no `backends:` block takes the pre-existing LMDB-only path untouched.
+`store` command reads synchronously through `BoxObserverLmdb` exclusively.
 
 **No write or delete flag exists anywhere in this group, on purpose.** `store` inspects;
 mutating state by hand is out of scope, and the fix for a value you want to change is the
@@ -763,12 +744,9 @@ package documents and defers to its callers to close. `rawbox-cli` is that bound
   as a malicious CLI argument.
 
 **Friendly empty states.** A workspace with no LMDB environment yet (nothing has run) is
-not an error for `store list`: it prints an informational message and exits `0`. Nor is it on
-its own a reason to call the workspace empty — a workspace whose keys are all Redis-backed
-legitimately has no LMDB environment at all, so what counts is whether the merged observer set
-found anything. `store get` always exits non-zero on the same condition — it was asked for a
-specific value, and a script needs to be able to tell "key found" from "nothing here yet"
-apart from a real crash.
+not an error for `store list`: it prints an informational message and exits `0`. `store get`
+always exits non-zero on the same condition — it was asked for a specific value, and a script
+needs to be able to tell "key found" from "nothing here yet" apart from a real crash.
 
 #### A. List Storage Keys (`store list`)
 Every key a workspace has actually written: key, workflow, strategy, byte size (the
@@ -789,6 +767,13 @@ rawbox-cli store list workspaces/live-trading/workspace.yaml
 rawbox-cli store list live-trading --workflow grid
 rawbox-cli store list live-trading --output json
 ```
+| Strategy | Backend | Queue Ceiling |
+| --- | --- | --- |
+| `lmdb-kv` | LMDB | - |
+| `lmdb-fifo` | LMDB | `queueSizeMax - 1` (ring buffer) |
+| `pg-kv` | PostgreSQL | - |
+| `pg-fifo` | PostgreSQL | `queueSizeMax` |
+
 ```text
 KEY            WORKFLOW  STRATEGY   SIZE (bytes)  DECLARED MAX  SOURCE      DEPTH/CAP
 grid_state     grid      lmdb-kv    128           1900          declared    -
@@ -823,8 +808,7 @@ would make someone else's store grow without bound. `store watch` follows
 `BoxObserverLmdb`'s documented contract exactly: one observer opened for the whole watch,
 its synchronous methods called again on every poll, nothing held open in between. Each
 call resets its own read transaction before returning, so a `store watch` left running for
-hours costs one reader slot and pins nothing. A Redis backend has no snapshot for a round
-trip to pin, and is polled through the same one-observer, one-call-per-poll shape.
+hours costs one reader slot and pins nothing.
 ```bash
 rawbox-cli store watch live-trading grid:grid_state reconciler:last_run --interval 2000
 rawbox-cli store watch live-trading --output json | jq .
@@ -860,8 +844,7 @@ age, the last event kind and timestamp off that run's NDJSON tail, step ok/faile
 and its last error message if any. A workflow the workspace lists but that has never
 produced a single run is shown as `never run` rather than omitted. Below the table, a
 compact storage panel: every key currently in the workspace's storage, by workflow, with its
-byte size and — for a queue — its depth, through the same observer set `store list` uses, so
-a workspace declaring `backends:` shows its Redis-held keys here too (§1.5).
+byte size and — for a queue — its depth, read through `BoxObserverLmdb` (§1.5).
 
 When the tail's last event is a `run.heartbeat` — a step blocked for a while rather than
 finished — the `LAST EVENT` column renders **"in `<step>` for `<duration>`"** instead of

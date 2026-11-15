@@ -385,8 +385,8 @@ export function checkFifoSeedIsList(parameters: {
 }
 
 /**
- * Any strategy that declares a `queueSizeMax` — today `lmdb-fifo` and
- * `redis-fifo`, tomorrow whatever else does.
+ * Any strategy that declares a `queueSizeMax` — today `lmdb-fifo`,
+ * tomorrow whatever else does.
  *
  * Structural rather than a list of names, so the set is read off the schema
  * union exactly like `STRATEGY_SHAPE_LIST` reads the field tables off
@@ -403,21 +403,21 @@ export type QueueCeilingStrategy = Extract<BoxStrategy, { queueSizeMax: number }
  * **None of the arithmetic is this function's.** The capacity comes from
  * {@link seedCapacityOf}, which reads the strategy's own row in the registry
  * (`@rawbox/store`'s `strategy/descriptor.ts`), so this cannot drift from what
- * the store itself will hold. That indirection is not tidiness — the two queue
- * strategies genuinely disagree: `lmdb-fifo`'s ring keeps one slot permanently
+ * the store itself will hold. That indirection is not tidiness — queue
+ * strategies can disagree: `lmdb-fifo`'s ring keeps one slot permanently
  * free so `head === tail` can mean *empty* rather than *full*, so a declared
- * `queueSizeMax` of N holds N-1; `redis-fifo`'s native list has no cursors to
- * disambiguate, so N holds N. A `- 1` written here would have been right for
- * the first queue strategy and wrong for the second, refusing a legal
+ * `queueSizeMax` of N holds N-1, whereas an unreserved native list has no
+ * cursors to disambiguate, so N holds N. A `- 1` written here would be right
+ * for a ring queue and wrong for one without a reserved slot, refusing a legal
  * full-capacity seed and telling the author to raise a ceiling that already
  * fit.
  *
  * **The prose is not this function's either, and that is the subtler half.**
  * The message used to end on "one slot is permanently reserved to distinguish a
- * full queue from an empty one" as a literal, which was true while `lmdb-fifo`
- * was the only queue and became false the day `redis-fifo` joined — a verifier
- * asserting, inside the author's own diagnostic, a property their queue does
- * not have. So the explanation is now
+ * full queue from an empty one" as a literal, which holds for `lmdb-fifo`
+ * alone and would be false for any queue strategy that reserves no slot — a
+ * verifier asserting, inside the author's own diagnostic, a property their queue
+ * does not have. So the explanation is now
  * {@link StrategyDescriptor.seedCapacityNote}, declared by the strategy it
  * describes and absent from the strategy with nothing to explain. Both the
  * clause and the "raise it to at least N" figure are then derived from the one
@@ -458,9 +458,10 @@ export function checkFifoSeedLength(parameters: {
   }
 
   // How many of the declared entries the author does not get to use: 1 for
-  // `lmdb-fifo`'s reserved slot, 0 for `redis-fifo`. It decides the ceiling the
-  // remedy asks for, so a strategy that reserves nothing is told to raise
-  // `queueSizeMax` to exactly the element count rather than one past it.
+  // `lmdb-fifo`'s reserved slot, 0 for a queue strategy that reserves none. It
+  // decides the ceiling the remedy asks for, so a strategy that reserves
+  // nothing is told to raise `queueSizeMax` to exactly the element count rather
+  // than one past it.
   const shortfall = strategy.queueSizeMax - capacity;
 
   // Present exactly when there IS a shortfall — the invariant asserted per row
@@ -1066,9 +1067,9 @@ export function validateStorageSizes(
       //     accept a document whose third item cannot be written.
       //   - the element count is the queue's initial depth, so it is bounded by
       //     whatever capacity the strategy declares, `seedCapacityOf(strategy)`
-      //     — its own row in the strategy registry, not this function. The two
-      //     queue strategies answer differently (`lmdb-fifo` reserves a slot,
-      //     `redis-fifo` does not), which is exactly why it is read rather than
+      //     — its own row in the strategy registry, not this function. Queue
+      //     strategies can answer differently (`lmdb-fifo` reserves a slot,
+      //     others need not), which is exactly why it is read rather than
       //     computed here.
       //
       // The mandatory list is what makes both of these well defined: without it
@@ -1181,10 +1182,11 @@ export function validateStorageSizes(
 // having consumed an input without recording the output that consumed it.
 //
 // **A transaction cannot span two stores.** There is no distributed commit here
-// and none is planned: two LMDB environments have two write locks, two Redis
-// servers have two `MULTI` scopes, and nothing brackets a pair of them. So a
-// workflow whose keys do not all live in one store cannot execute its very
-// first step-to-step hand-off, whatever the strategies are individually.
+// and none is planned: two LMDB environments have two write locks, two remote
+// servers have separate transaction scopes, and nothing brackets a pair of
+// them. So a workflow whose keys do not all live in one store cannot execute
+// its very first step-to-step hand-off, whatever the strategies are
+// individually.
 //
 // That is decidable from the document alone — every strategy is written out in
 // it — which is why it is rejected at verify time rather than discovered
@@ -1193,9 +1195,9 @@ export function validateStorageSizes(
 //
 // ## The discriminator is store identity, never a backend label
 //
-// The tempting check is a `backend` category — `'lmdb' | 'redis'` — and it is
-// **wrong**, not merely coarse: two `redis-kv` keys pointed at two different
-// servers are not co-transactional either, and a label saying "both are redis"
+// The tempting check is a coarse backend kind label — `'lmdb' | 'remote'` — and
+// it is **wrong**, not merely coarse: two keys pointed at two different remote
+// servers are not co-transactional either, and a label saying "both are remote"
 // would call them compatible and let the document through. So the question each
 // strategy answers is *which concrete store*, and it answers it itself, in the
 // strategy registry (`storeIdentityOf`, `@rawbox/store`'s
@@ -1203,18 +1205,18 @@ export function validateStorageSizes(
 //
 //   - `lmdb-kv` and `lmdb-fifo` are **one** store — one environment, one
 //     `transactionSync` — so a cell beside a queue is fine;
-//   - `redis-kv` and `redis-kv` are **two** stores whenever their `backend:`
-//     ids differ.
+//   - two keys on remote backend strategies are **two** stores whenever their
+//     `backend:` ids differ.
 //
 // Nothing here branches on `strategy.name`, and nothing here knows what a
 // backend is. A strategy joining the union is covered by this rule the day its
 // descriptor row states its store, with nothing in this file to update — the
 // same property `seedExpandsList` and `emptyReadMessage` already have, and the
 // reason there is deliberately no `BoxStrategyKind`/`BoxBackend` type in this
-// codebase (see that module's header). A `backend` label would have been
-// *actively wrong* here rather than merely imprecise: two `redis-kv` keys on
-// different servers are not co-transactional, and a `backend: 'redis'` label
-// would have said they were.
+// codebase (see that module's header). A backend kind label would have been
+// *actively wrong* here rather than merely imprecise: two keys on different
+// remote servers are not co-transactional, and a shared kind label would have
+// said they were.
 //
 // ## What participates, and what does not
 //
@@ -1236,10 +1238,10 @@ export function validateStorageSizes(
 //
 // The consequence is worth stating, because it is the point of declaring
 // ownership rather than merely tolerating it: a workflow whose own keys are all
-// LMDB may read a `redis-kv` box belonging to another workflow without this
+// LMDB may read a remote-backed box belonging to another workflow without this
 // rule firing. That is not a store split — nothing in this workflow's
-// transaction touches Redis — it is a read of a box another workflow keeps
-// consistent, which is exactly what a cross-workflow read is.
+// transaction touches that remote store — it is a read of a box another
+// workflow keeps consistent, which is exactly what a cross-workflow read is.
 // ---------------------------------------------------------------------------
 
 /**
@@ -1298,7 +1300,7 @@ function collectStoreParticipantList(workflow: unknown): StoreParticipant[] {
   }
 
   // `resolveKeyTable` is the one place `keys:` is read (`key-table.ts`), so
-  // every declared `redis-*` strategy reaches this sweep through the same
+  // every declared per-key strategy reaches this sweep through the same
   // table the budget and the size rules use.
   //
   // `keys:` is re-narrowed defensively first, because this function's own
@@ -1377,7 +1379,7 @@ function describeStoreSubject(participant: StoreParticipant): string {
  *
  * The store is named by its {@link StoreIdentity.description} rather than by its
  * id, because the id is an opaque equality token — telling an author that
- * `lmdb:workspace` and `redis:cache` differ names nothing they can go and edit.
+ * `lmdb:workspace` and `remote:cache` differ names nothing they can go and edit.
  */
 function describeStoreParticipant(participant: StoreParticipant): string {
   const store = participant.store.description;
@@ -1407,14 +1409,14 @@ function pickStoreSpokesman(group: readonly StoreParticipant[]): StoreParticipan
  * Every store this document's keys resolve to, beyond the first, as an
  * author-facing diagnostic naming both sides of the split.
  *
- * **One problem per divergent store, not per key.** A document with one Redis
+ * **One problem per divergent store, not per key.** A document with one remote
  * key and eight LMDB ones is one mistake, and eight lines saying so would bury
  * it; the extra keys in the divergent group are listed inside the one message
  * instead, so nothing is hidden.
  *
  * Reported against the first group — the one `storage.defaultStrategy` is in —
  * because that is the workflow's baseline store. The message deliberately does
- * **not** say which side is wrong: only the author knows whether the Redis key
+ * **not** say which side is wrong: only the author knows whether the remote key
  * was the mistake or the LMDB default was, so it names both fields and offers
  * both edits.
  */
@@ -1493,8 +1495,8 @@ function collectStoreSplitProblems(workflow: unknown): string[] {
  * where that gets noticed.
  *
  * **Requires a schema-valid document**, exactly as `validateStorageSizes` does
- * and for the same reason: it reads resolved strategy fields — `redis-kv`'s
- * `backend:` among them — as the types the schema guarantees, and a strategy
+ * and for the same reason: it reads resolved strategy fields — such as a
+ * remote strategy's `backend:` — as the types the schema guarantees, and a strategy
  * whose `name` is not a union member has no descriptor row to ask. Every
  * production caller reaches it through {@link validateWorkflowType}, which runs
  * the schema first; the defensive guards above exist because this function is
@@ -2381,10 +2383,10 @@ function findStrategyShape(name: unknown): StrategyShape | undefined {
  *
  * **`The`, not `An`.** The name is interpolated from `STRATEGY_SHAPE_LIST`,
  * which is derived from the schema union — so the article cannot be chosen for
- * the word that follows it. It read "An lmdb-kv" correctly by luck while both
- * shipping names began with `l`, and produced "An redis-kv" the moment a third
- * joined. A definite article is right for every name a strategy can have, which
- * is what a derived list requires.
+ * the word that follows it. An indefinite article would read "An lmdb-kv" by
+ * luck only while shipping names begin with `l`, and break as soon as a
+ * strategy starts with a consonant. A definite article is right for every name
+ * a strategy can have, which is what a derived list requires.
  */
 function describeStrategyFields(shape: StrategyShape): string {
   return `The ${shape.name} strategy takes exactly: ${shape.fieldList.join(', ')}.`;
@@ -2699,10 +2701,10 @@ export function validateWorkflowType(
   }
 
   // Last, and after the schema for the *same* requirement one step stronger:
-  // this reads whole resolved strategies — `redis-kv`'s `backend:` among them —
-  // and asks the strategy registry which store each names, so it needs a
-  // document whose strategy blocks are genuine union members rather than
-  // whatever the file happened to contain.
+  // this reads whole resolved strategies — including any strategy-specific
+  // fields like `backend:` — and asks the strategy registry which store each
+  // names, so it needs a document whose strategy blocks are genuine union members
+  // rather than whatever the file happened to contain.
   //
   // After `validateStorageSizes` rather than before it because the two are
   // about different subjects, and this is the wider one. That function reports

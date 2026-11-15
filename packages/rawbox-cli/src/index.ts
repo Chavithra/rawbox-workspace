@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
@@ -25,8 +26,28 @@ import { storeWatchCommand } from './commands/store/watch.js';
 import { workspaceStatusCommand } from './commands/workspace/status.js';
 import { workspaceLogsCommand } from './commands/workspace/logs.js';
 
+/**
+ * Reads `@rawbox/cli`'s own package version rather than letting yargs walk up
+ * from `process.cwd()` and report whatever consuming project's `package.json`
+ * happens to sit above the working directory.
+ */
+function resolveCliVersion(): string {
+  try {
+    const manifest = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    ) as { version?: unknown };
+    if (typeof manifest.version === 'string' && manifest.version.length > 0) {
+      return manifest.version;
+    }
+  } catch {
+    // Fall back only if the package manifest is unreadable.
+  }
+  return '0.1.0';
+}
+
 const cli = yargs(hideBin(process.argv))
   .scriptName('rawbox-cli')
+  .version(resolveCliVersion())
   .usage('$0 <resource> <action> [options]')
   .command(
     'project',

@@ -140,17 +140,15 @@ export interface BoxInspection {
   readonly fifo?: BoxFifoInspection;
   /**
    * Entries currently queued, independent of backend — present whenever
-   * `descriptorFor(strategy).hasDepth` is true (`strategy/descriptor.ts`),
-   * `lmdb-fifo` and `redis-fifo` alike.
+   * `descriptorFor(strategy).hasDepth` is true (`strategy/descriptor.ts`).
    *
    * For `lmdb-fifo` this always equals `fifo.depth`; it is populated here too
    * so a caller that wants "how many are queued" without caring which backend
-   * answered has one field to read regardless. `fifo` itself is never
-   * populated for `redis-fifo` — `BoxFifoInspection.head`/`tail`/
-   * `ringIndexMax` name LMDB's ring cursors specifically
-   * (`box-store/fifo-ring.ts`), and a Redis list has no such cursors to
-   * report; fabricating values for them would claim a mechanism that is not
-   * there (`box-observer-redis.ts`'s class doc comment).
+   * answered has one field to read regardless. `fifo` holds LMDB's ring
+   * cursors specifically (`BoxFifoInspection.head`/`tail`/`ringIndexMax`,
+   * `box-store/fifo-ring.ts`), whereas a non-ring queue backend with no such
+   * cursors populates `queueDepth` alone without fabricating ring cursor
+   * fields.
    */
   readonly queueDepth?: number;
 }

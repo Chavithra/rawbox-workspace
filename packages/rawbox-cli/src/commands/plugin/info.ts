@@ -12,13 +12,13 @@ import {
   rawboxLockPath,
   readRawboxLock,
   resolvePluginLockEntries,
-  resolveWorkspaceTargetFolder,
   validateWorkflowType,
   verifyRawboxLock,
   type RawboxLock,
   type ResolvedPluginLockEntry,
   type Workflow,
 } from '@rawbox/runner';
+import { resolveWorkspaceTargetFolderOrWarn } from '../../workspace/target-folder.js';
 
 import {
   ContractRegistryCache,
@@ -328,7 +328,13 @@ export async function pluginInfo(
     // Reporting on a document that does not validate would describe a file
     // that can never run, so the schema gate comes first.
     const content = await fs.readFile(absoluteWorkflowPath, 'utf-8');
-    const document = parseConfig(content, absoluteWorkflowPath);
+    const parsed = parseConfig(content, absoluteWorkflowPath);
+    if (parsed.isErr()) {
+      p.log.error(pc.red(parsed.error));
+      process.exit(1);
+      return;
+    }
+    const document = parsed.value;
 
     const typeResult = validateWorkflowType(document, workflowPath);
     if (typeResult.isErr()) {
@@ -377,6 +383,9 @@ export async function pluginInfo(
         p.log.warn(
           `No "kind: ${DOCUMENT_KIND.WORKSPACE}" document found in:\n` +
             discovery.searchedList.map((directory) => `  - ${directory}`).join('\n') +
+            (discovery.unreadableList
+              ? `\nCould not read:\n${discovery.unreadableList.map((entry) => `  - ${entry}`).join('\n')}`
+              : '') +
             `\nReporting without a workspace context: packages resolve from the current ` +
             `directory and ${RAWBOX_LOCK_FILENAME} cannot be located, so integrity is not ` +
             `checked. Pass --workspace <file> to include it.`,
@@ -392,7 +401,7 @@ export async function pluginInfo(
     // questions once a workspace can declare a `targetFolder:`. The lock stays
     // beside `workspace.yaml`; resolution follows setup.
     const resolutionDirectory = workspaceFile
-      ? await resolveWorkspaceTargetFolder(workspaceFile)
+      ? await resolveWorkspaceTargetFolderOrWarn(workspaceFile)
       : resolveFromDirectory;
 
     // -- 3. Read the lock --------------------------------------------------

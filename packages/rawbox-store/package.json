@@ -1,30 +1,20 @@
 {
   "author": "Chavithra <chavithra@gmail.com>",
   "dependencies": {
-    "async-mutex": "^0.5.0",
     "lmdb": "^3.5.6",
     "msgpackr": "^1.11.8",
     "neverthrow": "^8.2.0",
-    "typebox": "^1.3.9",
-    "winston": "^3.19.0"
+    "pg": "^8.20.0",
+    "typebox": "^1.3.9"
   },
   "description": "",
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.17",
     "@types/node": "^26.1.2",
-    "redis": "^6.2.1",
+    "@types/pg": "^8.20.0",
+    "async-mutex": "^0.5.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
-  },
-  "optionalDependencies": {
-    "redis-memory-server": "^0.17.1"
-  },
-  "peerDependencies": {
-    "redis": "^6.2.1"
-  },
-  "peerDependenciesMeta": {
-    "redis": {
-      "optional": true
-    }
   },
   "exports": {
     ".": {
@@ -35,17 +25,17 @@
       "types": "./dist/box-store/box-store-lmdb.d.ts",
       "default": "./dist/box-store/box-store-lmdb.js"
     },
-    "./box-store-redis": {
-      "types": "./dist/box-store/box-store-redis.d.ts",
-      "default": "./dist/box-store/box-store-redis.js"
+    "./box-store-pg": {
+      "types": "./dist/box-store/box-store-pg.d.ts",
+      "default": "./dist/box-store/box-store-pg.js"
     },
     "./box-observer-lmdb": {
       "types": "./dist/box-store/box-observer-lmdb.d.ts",
       "default": "./dist/box-store/box-observer-lmdb.js"
     },
-    "./box-observer-redis": {
-      "types": "./dist/box-store/box-observer-redis.d.ts",
-      "default": "./dist/box-store/box-observer-redis.js"
+    "./box-observer-pg": {
+      "types": "./dist/box-store/box-observer-pg.d.ts",
+      "default": "./dist/box-store/box-observer-pg.js"
     },
     "./box-peek": {
       "types": "./dist/box-store/box-peek.d.ts",

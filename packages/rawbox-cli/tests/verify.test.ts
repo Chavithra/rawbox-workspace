@@ -192,13 +192,13 @@ ${workflowRelativePathList.map((entry) => `  - ${entry}`).join('\n')}
 }
 
 /**
- * The same workspace, plus a `backends:` map — what a document declaring a
- * `redis-kv` key needs in order to verify, since `backend:` is an id into this
- * map rather than a connection string.
+ * The same workspace, plus a `backends:` map — what a workspace declaring
+ * external storage backends provides for `backend:` id resolution and env-var
+ * checks.
  *
- * The connection is a literal by default so a budget test exercises the budget
- * and nothing else. `connection` takes the `${VAR}` form when a test is about
- * env-var interpolation.
+ * The connection is a literal by default so a workspace test exercises schema
+ * and scoping rules without env-var lookup. `connection` takes the `${VAR}`
+ * form when a test is about env-var interpolation.
  */
 function workspaceWithBackendsYaml(options: {
   workflowRelativePathList?: string[];
@@ -208,7 +208,7 @@ function workspaceWithBackendsYaml(options: {
     './workflows/main.yaml',
   ];
   const backendById = options.backendById ?? {
-    main: 'redis://cache.internal:6379/0',
+    main: 'tcp://store.internal:9000/0',
   };
 
   return `
@@ -1608,573 +1608,21 @@ steps:
 });
 
 // ---------------------------------------------------------------------------
-// A strategy with no byte budget, end to end
-//
-// `StrategyDescriptor.budget` has always been optional, and `budgetForKey`,
-// `partitionKeyBudgetOutcomeList` and every reporting function in
-// `utils/budget-report.ts` have always had a `budgetable: false` half. Until
-// `redis-kv` joined the union that half was **unreachable through a real
-// document** — it could only be exercised against a hand-built mixture
-// (`budget-report.test.ts`). These tests reach it the way a reader does: by
-// running `verify` on a document that declares the strategy.
-//
-// **No Redis server is involved, and none is needed.** Everything below is
-// static analysis of two YAML files.
-//
-// The invariant every one of them protects is that the excluded key is
-// *visible*: named, marked "not applicable", and subtracted from a total that
-// says how many keys it now covers. A `0` in a column of byte counts would be
-// the one statement about the key that is certainly false: a zero is summed
-// like any other figure, and a summed zero states that the key costs nothing.
-// ---------------------------------------------------------------------------
-
-describe('verify — a strategy that declares no byte budget (redis-kv)', () => {
-  /**
-   * One `redis-kv` key beside two `lmdb-kv` ones.
-   *
-   * The LMDB figures are the *same* hand-computed ones as the cross-workflow
-   * parity test above, and deliberately so: `sleep_ms` is seeded and `slept_at`
-   * is bound by the step, both 8-byte keys under a `valueSizeMax` of 1900, so
-   * each costs `(2 + 8 + 8) + 1900 = 1918` bytes over one entry — 3836 across
-   * two entries. Adding a `redis-kv` key must not move either number by a byte,
-   * which is the arithmetic half of "excluded, not charged zero": a zero would
-   * be summed and would leave the total unchanged too, so the totals alone
-   * cannot distinguish the two. The *reporting* assertions below are what
-   * separate them.
-   */
-  /**
-   * A workflow whose every key is `redis-kv`, so **nothing** in it can be
-   * charged bytes.
-   *
-   * It used to mix an `lmdb-kv` default with one `redis-kv` key, which was the
-   * tidiest way to get a budgeted and an unbudgeted key into one report. The
-   * co-transactional rule (FORMAT.md, "Strategies") made that document
-   * illegal: one step's write and the next step's read are a single
-   * transaction, and a transaction cannot span two stores. The mixed case now
-   * lives at the *workspace* level — several workflows, each internally
-   * consistent — which is what a workspace total is, and what the workspace tests below
-   * exercise.
-   *
-   * What survives here is the sharper half: a report whose totals cover **none**
-   * of the keys swept. A `0` in a byte column is most dangerous precisely when
-   * it is the whole total, because "this workflow needs no storage" is a
-   * reading an operator can act on.
-   */
-  function redisOnlyWorkflowYaml(name = 'redis-only-workflow'): string {
-    return `
-kind: Workflow
-formatVersion: "1.0"
-name: ${name}
-plugins:
-  ${FAKE_PLUGIN}: "^1.0.0"
-storage:
-  defaultStrategy:
-    name: redis-kv
-    valueSizeMax: 1900
-    backend: main
-  keys:
-    sleep_ms:
-      seed: 500
-    cache_entry:
-      seed: "cached"
-steps:
-  - label: sleep
-    plugin: ${FAKE_PLUGIN}
-    operation: time/sleep
-    inputs:
-      ms: sleep_ms
-    outputs:
-      timestamp: slept_at
-`;
-  }
-
-  it('reports a redis-kv key as not applicable, never as 0 bytes', async () => {
-    const scenario = await makeScenario('budget-redis-kv', {
-      workspaceYaml: workspaceWithBackendsYaml({}),
-      workflowYaml: redisOnlyWorkflowYaml(),
-    });
-    await installFakePlugin(scenario.directory);
-
-    await verifyWorkflow(scenario.workflowPath, { workspace: scenario.workspacePath });
-
-    expectPassed();
-    const output = reported();
-
-    // The key is NAMED, with its strategy and where it came from — the same
-    // three facts a budgeted key's line carries, so a reader scanning the
-    // column does not have to notice an absence.
-    expect(output).toContain('Key "cache_entry" (redis-kv, declared)');
-    expect(output).toContain('not applicable');
-    expect(output).toContain('this strategy declares no byte budget');
-
-    // And it is NOT charged. The forbidden rendering is a byte figure on this
-    // key's line; asserted on the line itself rather than on the whole output,
-    // because "0" appears legitimately elsewhere (page counts, timestamps).
-    const cacheLine = output
-      .split('\n')
-      .find((line) => line.includes('Key "cache_entry"'));
-    expect(cacheLine).toBeDefined();
-    expect(cacheLine).not.toContain('dataBytesMax');
-    expect(cacheLine).not.toContain('0 bytes');
-    expect(cacheLine).toContain('NOT zero bytes');
-  });
-
-  it('says the totals cover fewer keys than the document declares, and names which', async () => {
-    const scenario = await makeScenario('budget-redis-note', {
-      workspaceYaml: workspaceWithBackendsYaml({}),
-      workflowYaml: redisOnlyWorkflowYaml('redis-note-workflow'),
-    });
-    await installFakePlugin(scenario.directory);
-
-    await verifyWorkflow(scenario.workflowPath, { workspace: scenario.workspacePath });
-
-    expectPassed();
-    const output = reported();
-
-    // The risk this closes is not "the key was not shown" but "the total was
-    // read as covering it". Three keys are swept and NONE is charged, which is
-    // the sharper form of the same hazard: the totals below are `0`, and a
-    // reader must not take that for "this workflow needs no storage".
-    expect(output).toContain('3 keys are NOT included in the figures below');
-    expect(output).toContain('"cache_entry" (redis-kv)');
-    expect(output).toContain('The totals below therefore cover 0 of 3 keys');
-    expect(output).toContain("they size THIS store's volume, not the other backend's");
-    // And the `0` is present as a total, so the sentence above is load-bearing
-    // rather than decorative.
-    expect(output).toContain('dataBytesMax ≤ 0 bytes across 0 entries');
-  });
-
-  /**
-   * A workspace holding one all-Redis workflow and one all-LMDB workflow.
-   *
-   * This is what "mixed" means now. A single workflow may not span two stores
-   * (FORMAT.md, "Strategies" — one step's write and the next step's read are
-   * one transaction), so the only legal way to have a budgeted and an
-   * unbudgeted key in one report is across workflows, which is exactly what a
-   * workspace total is.
-   *
-   * Returns the workspace path.
-   */
-  async function makeMixedWorkspace(dirName: string): Promise<string> {
-    const directory = path.join(rootDir, dirName);
-    const workflowDir = path.join(directory, 'workflows');
-    await fs.mkdir(workflowDir, { recursive: true });
-
-    await fs.writeFile(
-      path.join(workflowDir, 'redis.yaml'),
-      redisOnlyWorkflowYaml('ws-redis-workflow').trim(),
-      'utf-8',
-    );
-    await fs.writeFile(
-      path.join(workflowDir, 'lmdb.yaml'),
-      `
-kind: Workflow
-formatVersion: "1.0"
-name: ws-lmdb-workflow
-plugins:
-  ${FAKE_PLUGIN}: "^1.0.0"
-${KV_STORAGE}
-  keys:
-    sleep_ms:
-      seed: 500
-steps: []
-`.trim(),
-      'utf-8',
-    );
-
-    const workspacePath = path.join(directory, 'workspace.yaml');
-    await fs.writeFile(
-      workspacePath,
-      workspaceWithBackendsYaml({
-        workflowRelativePathList: ['./workflows/redis.yaml', './workflows/lmdb.yaml'],
-      }).trim(),
-      'utf-8',
-    );
-
-    return workspacePath;
-  }
-
-  it('reports the LMDB workflow as the whole of the workspace provisioning figure', async () => {
-    // Moved to the workspace level deliberately. This assertion used to live on
-    // a single workflow that mixed an `lmdb-kv` default with one `redis-kv`
-    // key; the co-transactional rule made that document illegal, and a workspace
-    // total is now where the mixed case lives — internally-consistent workflows.
-    const workspacePath = await makeMixedWorkspace('ws-budget-redis-total');
-
-    await verifyWorkspace(workspacePath);
-
-    expectPassed();
-    const output = reported();
-
-    // The LMDB workflow's one key is charged, and is the only thing charged.
-    expect(output).toContain('Key "sleep_ms" (lmdb-kv, declared): 1 entry, dataBytesMax ≤ 1918 bytes');
-    expect(output).toContain('Workflow "ws-lmdb-workflow": dataBytesMax ≤ 1918 bytes across 1 entries');
-
-    // The Redis workflow contributes no bytes at all, and says so rather than
-    // contributing a zero.
-    expect(output).toContain('Workflow "ws-redis-workflow": dataBytesMax ≤ 0 bytes across 0 entries');
-    expect(output).toContain('not applicable');
-
-    // And the workspace total is the LMDB figure — the Redis workflow neither
-    // adds to it nor is silently folded into it.
-    expect(output).toContain('Workspace storage budget total');
-    expect(output).toContain('dataBytesMax ≤ 1918 bytes across 1 entries');
-    // Still two distinctly labelled figures. A partial total is still a total
-    // that must not be confused with a volume size.
-    expect(output).toContain('recommendedVolumeBytes');
-    expect(output).toContain('DIFFERENT number from dataBytesMax');
-  });
-
-  it('leaves the workspace figures identical to a workspace with no redis workflow', async () => {
-    // The parity check that makes "excluded" mean excluded, also lifted to the
-    // workspace level. A Redis workflow must change WHAT IS REPORTED without
-    // changing ANY FIGURE a container is sized from.
-    const withRedisPath = await makeMixedWorkspace('ws-budget-parity-with');
-
-    await verifyWorkspace(withRedisPath);
-    expectPassed();
-    const outputWithRedis = reported();
-
-    // The same workspace minus the Redis workflow entirely.
-    const withoutDir = path.join(rootDir, 'ws-budget-parity-without');
-    const withoutWorkflowDir = path.join(withoutDir, 'workflows');
-    await fs.mkdir(withoutWorkflowDir, { recursive: true });
-    await fs.writeFile(
-      path.join(withoutWorkflowDir, 'lmdb.yaml'),
-      `
-kind: Workflow
-formatVersion: "1.0"
-name: ws-lmdb-workflow
-plugins:
-  ${FAKE_PLUGIN}: "^1.0.0"
-${KV_STORAGE}
-  keys:
-    sleep_ms:
-      seed: 500
-steps: []
-`.trim(),
-      'utf-8',
-    );
-    const withoutPath = path.join(withoutDir, 'workspace.yaml');
-    await fs.writeFile(
-      withoutPath,
-      workspaceWithBackendsYaml({
-        workflowRelativePathList: ['./workflows/lmdb.yaml'],
-      }).trim(),
-      'utf-8',
-    );
-
-    // `messageList` accumulates across runs within one test and is reset only
-    // in `beforeEach`, so the second run has to start from a clean slate or it
-    // would be compared against both runs concatenated.
-    messageList = [];
-
-    await verifyWorkspace(withoutPath);
-    expectPassed();
-    const outputWithoutRedis = reported();
-
-    // The workspace-level FIGURES, not the prose around them — the two numbers
-    // an operator provisions from, plus the entry count behind them.
-    //
-    // Deliberately numbers rather than whole lines. The two reports do differ
-    // in one word: `recommendedVolumeBytes` explains itself as covering "2
-    // workflows' dbis" with the Redis workflow present and "1 workflow' dbis"
-    // without, because the LMDB environment charges one database per workflow
-    // regardless of where that workflow's keys actually live. The resulting
-    // BYTES are identical, and an over-estimate would be the safe direction
-    // anyway, so the invariant worth pinning is the figure — asserting the
-    // sentence would fail on a true statement.
-    const extractDataBytes = (output: string): string[] =>
-      output
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.startsWith('Workspace "'))
-        .map(
-          (line) =>
-            line.match(
-              /dataBytesMax ≤ \d+ bytes across \d+ entries|recommendedVolumeBytes = \d+ bytes/,
-            )?.[0] ?? line,
-        );
-
-    // Identical workspace totals: the figure a container is sized from, and the
-    // entry count behind it. An unbudgetable key charged `0` would also satisfy
-    // this — which is why the tests above assert the reporting as well.
-    expect(extractDataBytes(outputWithRedis)).toEqual(extractDataBytes(outputWithoutRedis));
-
-    // And the difference that SHOULD exist does: only one of them names keys it
-    // could not charge.
-    expect(outputWithRedis).toContain('not applicable');
-    expect(outputWithoutRedis).not.toContain('not applicable');
-    expect(outputWithoutRedis).not.toContain('NOT part of the workspace total above');
-  });
-
-  it('lists the excluded key by workflow and key name in a workspace total', async () => {
-    const directory = path.join(rootDir, 'ws-budget-redis');
-    const workflowDir = path.join(directory, 'workflows');
-    await fs.mkdir(workflowDir, { recursive: true });
-
-    await fs.writeFile(
-      path.join(workflowDir, 'mixed.yaml'),
-      redisOnlyWorkflowYaml('ws-mixed-workflow').trim(),
-      'utf-8',
-    );
-    // A second, purely LMDB workflow, so the workspace total is a real total
-    // over a mixed workspace rather than a total over one workflow.
-    await fs.writeFile(
-      path.join(workflowDir, 'lmdb.yaml'),
-      `
-kind: Workflow
-formatVersion: "1.0"
-name: ws-lmdb-workflow
-plugins:
-  ${FAKE_PLUGIN}: "^1.0.0"
-${KV_STORAGE}
-  keys:
-    sleep_ms:
-      seed: 500
-steps: []
-`.trim(),
-      'utf-8',
-    );
-
-    const workspacePath = path.join(directory, 'workspace.yaml');
-    await fs.writeFile(
-      workspacePath,
-      workspaceWithBackendsYaml({
-        workflowRelativePathList: ['./workflows/mixed.yaml', './workflows/lmdb.yaml'],
-      }).trim(),
-      'utf-8',
-    );
-
-    await verifyWorkspace(workspacePath);
-
-    expectPassed();
-    const output = reported();
-
-    // Per workflow, first — the key named where it was declared.
-    expect(output).toContain('Key "cache_entry" (redis-kv, declared)');
-
-    // Then beneath the workspace total, tagged with the workflow it belongs to.
-    // The workflow NAME, not the file path: it is the identifier a reader can
-    // go and look up.
-    expect(output).toContain('Workspace storage budget total');
-    expect(output).toContain('3 keys are NOT part of the workspace total above');
-    expect(output).toContain(
-      'Workflow "ws-mixed-workflow", key "cache_entry" (redis-kv, declared)',
-    );
-    expect(output).toContain(
-      'not applicable — bounded by the backend that holds it, not by this workspace',
-    );
-
-    // The total itself is the LMDB workflow's figure and nothing else. Every
-    // key of the Redis workflow is excluded, so the workspace total is exactly
-    // the 1918 bytes of `ws-lmdb-workflow`'s single `sleep_ms` — not a sum that
-    // quietly counted the excluded keys as zero.
-    expect(output).toContain('Workspace "verify-test-workspace": dataBytesMax ≤ 1918 bytes');
-  });
-
-  it('quotes redis-kv\'s own empty-read sentence for a key nothing writes', async () => {
-    // The diagnostic for a key that is read but never written must quote the
-    // sentence the key's OWN strategy
-    // declares. `redis-kv` declares the same sentence as `lmdb-kv` on purpose —
-    // a cell that is missing is a cell that is missing, whatever holds it — so
-    // this asserts the rule reaches a strategy that reuses another's wording,
-    // which is the case the rule explicitly allows.
-    const scenario = await makeScenario('budget-redis-unwritten', {
-      workspaceYaml: workspaceWithBackendsYaml({}),
-      workflowYaml: `
-kind: Workflow
-formatVersion: "1.0"
-name: redis-unwritten-workflow
-plugins:
-  ${FAKE_PLUGIN}: "^1.0.0"
-storage:
-  defaultStrategy:
-    name: redis-kv
-    valueSizeMax: 1900
-    backend: main
-steps:
-  - label: sleep
-    plugin: ${FAKE_PLUGIN}
-    operation: time/sleep
-    inputs:
-      ms: never_written
-`,
-    });
-    await installFakePlugin(scenario.directory);
-
-    await verifyWorkflow(scenario.workflowPath, { workspace: scenario.workspacePath });
-
-    expectFailed();
-    const output = reported();
-    expect(output).toContain('never_written');
-    expect(output).toContain('Value not found');
-  });
-});
-
-// ---------------------------------------------------------------------------
 // `backends:` — the workspace's map of backend id → connection descriptor
 //
-// Two diagnostics, both verify-time, both about connecting to the RIGHT place:
-// an id that names no entry, and an entry whose connection string references an
-// environment variable nobody set. The second is the one with teeth — a run
-// that silently connects to `localhost` because `${REDIS_URL}` expanded to
-// nothing is the failure the whole design is arranged around.
+// An entry whose connection string references an environment variable nobody set
+// is a verify-time error — a run that silently connects to `localhost` because
+// `${BACKEND_URL}` expanded to nothing is the failure the whole design is
+// arranged around.
 //
 // No server is contacted by any of these. Nothing here opens a socket.
 // ---------------------------------------------------------------------------
 
 describe('verify — backends', () => {
-  function redisWorkflowYaml(options: {
-    name?: string;
-    backendId?: string;
-  } = {}): string {
-    const name = options.name ?? 'redis-backend-workflow';
-    const backendId = options.backendId ?? 'main';
-
-    return `
-kind: Workflow
-formatVersion: "1.0"
-name: ${name}
-plugins:
-  ${FAKE_PLUGIN}: "^1.0.0"
-storage:
-  defaultStrategy:
-    name: redis-kv
-    valueSizeMax: 1900
-    backend: ${backendId}
-  keys:
-    cache_entry:
-      seed: "cached"
-steps: []
-`;
-  }
-
-  it('resolves a backend id and reports every variable as set', async () => {
-    process.env.RAWBOX_TEST_REDIS_URL = 'redis://cache.internal:6379/0';
-    try {
-      const scenario = await makeScenario('backends-ok', {
-        workspaceYaml: workspaceWithBackendsYaml({
-          backendById: { main: '${RAWBOX_TEST_REDIS_URL}' },
-        }),
-        workflowYaml: redisWorkflowYaml(),
-      });
-      await installFakePlugin(scenario.directory);
-
-      await verifyWorkflow(scenario.workflowPath, { workspace: scenario.workspacePath });
-
-      expectPassed();
-      expect(reported()).toContain(
-        'storage backend reference resolved',
-      );
-    } finally {
-      delete process.env.RAWBOX_TEST_REDIS_URL;
-    }
-  });
-
-  it('fails when a backend id names no entry, listing the ids that do exist', async () => {
-    const scenario = await makeScenario('backends-unknown-id', {
-      workspaceYaml: workspaceWithBackendsYaml({
-        backendById: { cache: 'redis://cache.internal:6379/0' },
-      }),
-      workflowYaml: redisWorkflowYaml({ backendId: 'main' }),
-    });
-    await installFakePlugin(scenario.directory);
-
-    await verifyWorkflow(scenario.workflowPath, { workspace: scenario.workspacePath });
-
-    expectFailed();
-    const output = reported();
-
-    // Name the thing, name where it was declared, say what to do.
-    expect(output).toContain('Backend "main" is not declared by this workspace');
-    // The declaration path the diagnostic names, which is where the fixture
-    // puts the strategy: on the default rather than on a per-key override.
-    // The point of the assertion is that the message names WHERE the offending
-    // backend id was written, not merely that an id was unknown.
-    expect(output).toContain('storage.defaultStrategy');
-    expect(output).toContain('Declared backend ids: "cache".');
-    // Never a schema branch dump: the document is schema-valid and what is
-    // wrong is a reference.
-    expect(output).not.toContain('anyOf');
-  });
-
-  it('shows the block to add when the workspace declares no backends at all', async () => {
-    const scenario = await makeScenario('backends-absent', {
-      workspaceYaml: workspaceYaml(),
-      workflowYaml: redisWorkflowYaml({ backendId: 'main' }),
-    });
-    await installFakePlugin(scenario.directory);
-
-    await verifyWorkflow(scenario.workflowPath, { workspace: scenario.workspacePath });
-
-    expectFailed();
-    const output = reported();
-
-    expect(output).toContain('has no "backends:" block at all');
-    // A missing block is a different mistake from a missing entry, and gets the
-    // block to write rather than a list of ids that would be empty.
-    expect(output).toContain('backends:');
-    expect(output).toContain('connection: ${REDIS_URL}');
-    expect(output).toContain('never a connection string');
-  });
-
-  it('fails loudly when a referenced environment variable is unset', async () => {
-    delete process.env.RAWBOX_TEST_ABSENT_URL;
-
-    const scenario = await makeScenario('backends-unset-env', {
-      workspaceYaml: workspaceWithBackendsYaml({
-        backendById: { main: '${RAWBOX_TEST_ABSENT_URL}' },
-      }),
-      workflowYaml: redisWorkflowYaml(),
-    });
-    await installFakePlugin(scenario.directory);
-
-    await verifyWorkflow(scenario.workflowPath, { workspace: scenario.workspacePath });
-
-    expectFailed();
-    const output = reported();
-
-    // The variable AND the backend id — a workspace may declare several, and
-    // the author needs to know which entry to look at.
-    expect(output).toContain('RAWBOX_TEST_ABSENT_URL');
-    expect(output).toContain('Backend "main" cannot be resolved');
-    expect(output).toContain('backends.main.connection');
-    expect(output).toContain('not set in this process');
-    // The reading that must be contradicted: that something sensible happens
-    // anyway. It does not — that is the whole point of the check.
-    expect(output).toContain('NO default and no fallback');
-  });
-
-  it('treats an empty variable as unset, and says which it was', async () => {
-    process.env.RAWBOX_TEST_EMPTY_URL = '';
-    try {
-      const scenario = await makeScenario('backends-empty-env', {
-        workspaceYaml: workspaceWithBackendsYaml({
-          backendById: { main: 'redis://user:${RAWBOX_TEST_EMPTY_URL}@host:6379' },
-        }),
-        workflowYaml: redisWorkflowYaml(),
-      });
-      await installFakePlugin(scenario.directory);
-
-      await verifyWorkflow(scenario.workflowPath, { workspace: scenario.workspacePath });
-
-      expectFailed();
-      const output = reported();
-
-      // The exact failure being designed out: an empty expansion leaves a URL
-      // that is still syntactically valid, and a client would open it.
-      expect(output).toContain('RAWBOX_TEST_EMPTY_URL');
-      expect(output).toContain('set, but empty');
-    } finally {
-      delete process.env.RAWBOX_TEST_EMPTY_URL;
-    }
-  });
-
   it('does not fail an LMDB-only workflow over a backend it never references', async () => {
     // The scoping rule: `workflow verify` checks the ids THIS workflow names.
     // A developer without the production password must still be able to verify
-    // a workflow that touches no Redis.
+    // a workflow that touches no external backend.
     delete process.env.RAWBOX_TEST_PROD_URL;
 
     const scenario = await makeScenario('backends-unreferenced', {
@@ -2224,35 +1672,6 @@ steps: []
     expect(output).toContain('RAWBOX_TEST_UNUSED_URL');
   });
 
-  it('names the workflow file when a backend id is unknown under workspace verify', async () => {
-    const directory = path.join(rootDir, 'ws-backends-unknown');
-    const workflowDir = path.join(directory, 'workflows');
-    await fs.mkdir(workflowDir, { recursive: true });
-    await fs.writeFile(
-      path.join(workflowDir, 'redis.yaml'),
-      redisWorkflowYaml({ name: 'ws-redis-workflow', backendId: 'typo' }).trim(),
-      'utf-8',
-    );
-
-    const workspacePath = path.join(directory, 'workspace.yaml');
-    await fs.writeFile(
-      workspacePath,
-      workspaceWithBackendsYaml({
-        workflowRelativePathList: ['./workflows/redis.yaml'],
-        backendById: { main: 'redis://cache.internal:6379/0' },
-      }).trim(),
-      'utf-8',
-    );
-
-    await verifyWorkspace(workspacePath);
-
-    expectFailed();
-    const output = reported();
-    expect(output).toContain('Backend "typo" is not declared by this workspace');
-    expect(output).toContain('./workflows/redis.yaml');
-    expect(output).toContain('Declared backend ids: "main".');
-  });
-
   it('rejects a workspace whose backend entry carries an unrecognised field', async () => {
     // `Workspace` stays closed and so do the map's VALUES: a misspelt setting
     // inside a backend entry is an error rather than a dropped setting.
@@ -2275,7 +1694,7 @@ workflowPathList:
   - ./workflows/a.yaml
 backends:
   main:
-    connection: "redis://cache.internal:6379/0"
+    connection: "tcp://store.internal:9000/0"
     connexion: "typo"
 `.trim(),
       'utf-8',
@@ -2287,27 +1706,32 @@ backends:
     expect(reported()).toContain('Workspace config schema is invalid');
   });
 
-  it('cannot connection-verify against a synthesized workspace, and says so', async () => {
-    // The consequence stated in `workspace/backends.ts`: shape verification
-    // needs the workflow alone, connection verification needs the workspace.
-    // `--workspace-name` has no workspace document at all, so there is nowhere
-    // for `backends:` to live — the same shape of answer `plugin:` resolution
-    // gives when no workspace can be found.
-    const directory = path.join(rootDir, 'backends-scratch');
-    await fs.mkdir(directory, { recursive: true });
-    const workflowPath = path.join(directory, 'main.yaml');
-    await fs.writeFile(workflowPath, redisWorkflowYaml().trim(), 'utf-8');
-    await installFakePlugin(directory);
+  it('rejects a workflow whose storage strategy name is unknown', async () => {
+    const scenario = await makeScenario('unknown-strategy-name', {
+      workspaceYaml: workspaceWithBackendsYaml({}),
+      workflowYaml: `
+kind: Workflow
+formatVersion: "1.0"
+name: unknown-strategy-workflow
+plugins:
+  ${FAKE_PLUGIN}: "^1.0.0"
+storage:
+  defaultStrategy:
+    name: unknown-kv
+    valueSizeMax: 1900
+    backend: main
+  keys:
+    cache_entry:
+      seed: "cached"
+steps: []
+`,
+    });
+    await installFakePlugin(scenario.directory);
 
-    await verifyWorkflow(workflowPath, { workspaceName: 'scratch-ws' });
+    await verifyWorkflow(scenario.workflowPath, { workspace: scenario.workspacePath });
 
     expectFailed();
-    const output = reported();
-    expect(output).toContain('synthesized workspace');
-    expect(output).toContain('--workspace <file>');
-    // The budget still printed: the document IS shape-verifiable on its own,
-    // and the report above this failure proves it.
-    expect(output).toContain('Key "cache_entry" (redis-kv, declared)');
+    expect(reported()).toContain('Workflow schema is invalid');
   });
 });
 

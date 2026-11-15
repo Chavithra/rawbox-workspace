@@ -11,7 +11,7 @@ import { type Workflow } from './workflow-types.js';
 // strategy needs a store implementation wired into the run, and the two sets
 // are allowed to diverge for exactly one release at a time: a strategy's shape,
 // its authoring diagnostics and its budget semantics land before the store that
-// backs it does. `redis-kv` is the first to sit in that gap
+// backs it does — a future remote or alternative strategy can sit in that gap
 // (FORMAT.md, "Strategies").
 //
 // A document declaring one is **valid**, and `workflow verify` says so — the
@@ -23,14 +23,14 @@ import { type Workflow } from './workflow-types.js';
 // ## Why the check lives here and not in `@rawbox/store`
 //
 // `@rawbox/store` cannot answer this question. It ships `BoxStoreLmdb` and
-// would ship a Redis store beside it; which of them a *run* constructs is the
-// runner's decision, made in `tool/run-workflow.ts` where `BoxStoreLmdb.create`
-// is called and nothing else is. A list in the store package would be a guess
-// about its caller.
+// could ship additional store implementations beside it; which of them a *run*
+// constructs is the runner's decision, made in `tool/run-workflow.ts` where
+// `BoxStoreLmdb.create` is called and nothing else is. A list in the store
+// package would be a guess about its caller.
 //
 // The store's own backstop stays where it is and is deliberately not removed:
 // `BoxStoreLmdb.putSync`/`getSync` answer an unrouted strategy with
-// `err("Unsupported strategy: 'redis-kv' — …")` rather than a throw, because
+// `err("Unsupported strategy: '<name>' — …")` rather than a throw, because
 // nothing may throw across that package's API boundary
 // (`packages/rawbox-store/README.md`, "API Reference"). That covers a caller
 // using `@rawbox/store` directly, with no workflow and no runner. It is a
@@ -72,10 +72,10 @@ import { type Workflow } from './workflow-types.js';
  * missing store passing silently.
  */
 export const WIRED_STRATEGY_NAME_LIST: readonly BoxStrategy['name'][] = [
-  // `BoxStoreLmdb` — constructed in `tool/run-workflow.ts`, routes both of
-  // these itself (`box-store-lmdb.ts`, `putSync`/`getSync`).
   'lmdb-kv',
   'lmdb-fifo',
+  'pg-kv',
+  'pg-fifo',
 ];
 
 /**
@@ -109,9 +109,9 @@ interface StrategyDeclaration {
  * hand.** A key resolves its strategy from `keys[key].strategy`, then
  * `defaultStrategy` (FORMAT.md, "`storage`"). Sweeping the then-existing
  * `storage.strategies` alone was complete while it was the only per-key source
- * and silently stopped being so when `keys:` landed: a `redis-kv` declared
- * there escaped this check entirely and reached a `put` — which is the one
- * thing this module exists to prevent, and it would have failed *after* the
+ * and silently stopped being so when `keys:` landed: an unwired strategy
+ * declared there escaped this check entirely and reached a `put` — which is
+ * the one thing this module exists to prevent, and it would have failed *after* the
  * environment was opened and the seeds written rather than before the run
  * started. The table is what keeps that from recurring.
  *

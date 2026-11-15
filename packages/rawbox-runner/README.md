@@ -3,8 +3,8 @@
 `@rawbox/runner` is the orchestration and execution engine of the Rawbox Framework. Powered
 by **XState v5**, it validates a workflow document, resolves it into a runtime model, and
 executes it as a state machine. It reads step inputs from and writes step outputs/errors to
-[`@rawbox/store`](../rawbox-store/README.md) under strict storage boundary rules — today
-through the LMDB store, the only one this package constructs (§2.3).
+[`@rawbox/store`](../rawbox-store/README.md) under strict storage boundary rules — routing
+keys across the workspace's LMDB store and any configured PostgreSQL backends (§2.3).
 
 This package's TypeBox schemas define the document format — what they accept is the
 format; there is no separate specification to drift from. §2 below is the tour.
@@ -46,7 +46,7 @@ graph TD
    plugin's contract registry, then resolves the document into the runtime model.
 2. **Select Step**: Determines the next step from the step list or from the label a
    control-flow step returned.
-3. **Sync DB**: Reads the step's input boxes out of LMDB into a record.
+3. **Sync DB**: Reads the step's input boxes out of storage into a record.
 4. **Run Step**: Loads the addressed definition from the registry cache and executes its
    validated handler.
 5. **Exit**: Persists terminal logs and tears down resources.
@@ -73,7 +73,7 @@ workflowPathList:
   - ./workflows/throttle-ops.workflow.yaml
 backends:                                     # optional — §1.3
   main:
-    connection: redis://cache.internal:6379/${REDIS_PASSWORD}
+    connection: tcp://store.internal:9000/${BACKEND_PASSWORD}
 seedOverrides:                                # optional — §1.4
   ./workflows/throttle-ops.workflow.yaml:     # the entry workflowPathList holds
     throttle_ms: 250
@@ -160,22 +160,22 @@ the LMDB environment is not an entry here and never will be, its location being 
 ```yaml
 backends:
   main:
-    connection: redis://cache.internal:6379/0
+    connection: ${BACKEND_URL}
   session:
-    connection: rediss://app:${SESSION_REDIS_PASSWORD}@sessions.internal:6380/1
+    connection: tcp://app:${BACKEND_PASSWORD}@sessions.internal:9000/1
 ```
 
 `connection` is the only field. **Credentials come from the environment, not from this
 document**, which is committed: any `${VARIABLE}` is substituted from the process environment
 at verify time and at run time by `resolveBackendConnection`. The reference form is `${NAME}`
 and only that — a bare `$NAME` is a literal, because a URL password may legitimately contain a
-`$` and `redis://u:pa$$w0rd@h:6379` would otherwise resolve in the dangerous direction.
+`$` and `tcp://u:pa$$w0rd@h:9000` would otherwise resolve in the dangerous direction.
 
 Two things are errors rather than fallbacks, both at verify time:
 
 | Problem | Why it is not tolerated |
 | --- | --- |
-| An **unset or empty** variable (`collectBackendEnvProblems`) — names the variable and the backend id | `redis://:@localhost:6379` is a syntactically valid URL, so an empty expansion opens a connection to the wrong server with no error anywhere. A store that answers the wrong questions is worse than one that will not open. |
+| An **unset or empty** variable (`collectBackendEnvProblems`) — names the variable and the backend id | `tcp://:@localhost:9000` is a syntactically valid URL, so an empty expansion opens a connection to the wrong server with no error anywhere. A store that answers the wrong questions is worse than one that will not open. |
 | An **id naming no entry** (`collectUnknownBackendProblems`) — names the id and lists the ids that exist | A mistyped id is caught here, before anything runs; a mistyped hostname is caught by a connection timeout, if at all. This is the whole reason `backend:` is an id and not a connection string. |
 
 **Which command checks what follows from which document is being verified.**
@@ -418,11 +418,11 @@ that carries no marker of its own.
 | A key matches **`[A-Za-z0-9_.-]+`** | Names the offending characters, rendered visibly so a space, tab or control character is not invisible. The empty key is reported as empty. |
 | Neither **removed** `storage:` block appears — `strategies:`, `seed:` | Runs ahead of the schema, so the answer is the migration rather than "unknown property": names the block, says it was removed, and prints the `keys:` entries that replace it, built from the document's own keys and its own values. A key named in both is told, in each message, that it becomes one entry. |
 | A key read by an `inputs:` binding is **written by something** — some step's `outputs:`/`errors:`, or its own entry's `seed:` | Offers both fixes, and quotes the runtime failure it prevents *verbatim from the key's own strategy* (`Value not found` for a cell, `Queue empty` for a queue — `StrategyDescriptor.emptyReadMessage`). A write by *any* step counts, whatever the order; merely declaring a key does not. |
-| A seed for a key whose writes **append** is a list, each element one entry, at most the capacity **that strategy** declares | Names the key, the strategy and where it was declared, and shows the list that would be right. The capacity is not `queueSizeMax - 1` in general: it is that for `lmdb-fifo`, whose ring reserves a slot, and `queueSizeMax` exactly for `redis-fifo`, which reserves none — so the message explains a reserved slot only where there is one, and the ceiling it tells the author to raise to follows the same figure. |
+| A seed for a key whose writes **append** is a list, each element one entry, at most the capacity **that strategy** declares | Names the key, the strategy and where it was declared, and shows the list that would be right. The capacity is read from the strategy's `StrategyDescriptor` (`seedCapacity` / `seedCapacityNote`): `lmdb-fifo`'s ring reserves a slot so it holds `queueSizeMax - 1`, whereas a queue strategy that reserves no slot holds `queueSizeMax` — so the message explains a reserved slot only where `seedCapacityNote` is defined, and the ceiling it tells the author to raise to follows the same shortfall. |
 | A seed fits its key's `valueSizeMax` and msgpack can encode it | Names the value's document path and the declaration that bounds it; for a queue seed, the offending **element**. |
 | A key declaring `workflow:` is **not written and not seeded**, and does not name its own workflow | `collectStorageOwnershipProblems`. A write binding has no `workflow` field at all, so resolved, `outputs: { result: shared_state }` would silently become a *second* box of that name in this workflow. A seed would create the same second box. Naming one's own workflow is an error rather than a no-op, so that "declares `workflow:`" and "is another workflow's" stay the same question. |
 | A `{ key, workflow }` binding and a key table entry for that key **agree** | Disagreement is rejected, naming both sites; agreement is a legal restatement. The binding long form is **not** deprecated: it is the only way to read `metrics` from two genuinely different workflows in one document. |
-| Every key resolves to **one store** | `collectStoreSplitProblems`, over `StrategyDescriptor.storeIdentity`. One step's outputs are written and the next step's inputs read in a *single* transaction, and no transaction spans two stores. "One store" is the concrete store, never the kind: the two LMDB strategies are one environment, while two `redis-*` keys are one store only when their `backend:` ids match. Another workflow's keys are excluded — its box is its own to store. |
+| Every key resolves to **one store** | `collectStoreSplitProblems`, over `StrategyDescriptor.storeIdentity`. One step's outputs are written and the next step's inputs read in a *single* transaction, and no transaction spans two stores. "One store" is the concrete store, never the kind: the two LMDB strategies (`lmdb-kv` and `lmdb-fifo`) are one environment, while remote-backend strategies share a store only when their `storeIdentity.id` (such as a matching `backend:` id) matches. Another workflow's keys are excluded — its box is its own to store. |
 | No field is unrecognised, anywhere | Every object schema in the format is built with `StrictObject`, so `additionalProperties` is `false` throughout. A stray field on a `strategy` is answered by naming the strategy that does take it. |
 
 Both storage-budget figures — `dataBytesMax` and `recommendedVolumeBytes` — are computed
@@ -431,27 +431,26 @@ the step-bound keys that `@rawbox/store` cannot walk to itself, and `boxStorageF
 (`workflow/key-table.ts`) supplies the declared ones — **every** budget call site must route
 through it, because an authoring `storage:` block still type-checks as a `BoxStorage` and
 charges nothing
-([rawbox-store README §1.D](../rawbox-store/README.md#d-the-storage-budget)). A strategy that
-declares no byte model — both Redis ones — has its keys **named and excluded** from the
-totals rather than charged `0`.
+([rawbox-store README §1.D](../rawbox-store/README.md#d-the-storage-budget)). Any strategy that
+declares no byte model has its keys **named and excluded** from the totals rather than charged `0`.
 
 > [!IMPORTANT]
-> **A verifying document is not necessarily a runnable one, and that gap is checked on the run
-> path.** `redis-kv` and `redis-fifo` are valid strategies: the schema accepts them, the seed
-> rules check them, the budget reports what it can, and `workflow verify` passes. What this
-> package does not yet do is *construct* a Redis store — `runWorkflowInstance` builds a
-> `BoxStoreLmdb` and nothing else — so a run declaring one is refused at bootstrap, before the
-> environment is opened and before any seed is written (`workflow/store-support.ts`). The
-> refusal names the strategy and the declaration site, states that nothing was written and
-> nothing fell back to another strategy, and lists the strategies this version does
-> implement — a silent fallback to LMDB would put a workflow's data somewhere its author
-> did not ask for.
+> **A verifying document is only runnable when every declared strategy has a wired store, and
+> that check lives on the run path (`workflow/store-support.ts`).** `runWorkflowInstance`
+> opens stores for `WIRED_STRATEGY_NAME_LIST` (`['lmdb-kv', 'lmdb-fifo', 'pg-kv', 'pg-fifo']`)
+> via `openWorkflowStore`. If a future strategy lands in `@rawbox/store`'s `BoxStrategy` union
+> and passes schema, seed, and `workflow verify` checks before its store implementation is wired
+> into the runner, a run declaring it is refused at bootstrap — before any store is opened and
+> before any seed is written. The refusal names the strategy and the declaration site, states
+> that nothing was written and nothing fell back to another strategy, and lists the strategies
+> this version implements.
 >
 > The list of unwired strategies is **derived** (`UNWIRED_STRATEGY_NAME_LIST`, every union
-> member minus the hand-kept wired list), so it empties itself the day a store is wired, and a
-> newly wired store missing from the hand-kept half fails closed — refusing loudly — rather
-> than passing silently. Verification is deliberately *not* made to reject these documents:
-> they become runnable with no change to the file.
+> member minus the hand-kept wired list — empty today when every shipped strategy is wired),
+> so it empties itself when a store is wired, and a newly wired store missing from the
+> hand-kept half fails closed — refusing loudly — rather than passing silently. Verification
+> is deliberately *not* made to reject unwired strategies: documents declaring them become
+> runnable with no change to the file once the store is wired.
 
 ---
 
@@ -905,7 +904,7 @@ const resolved = resolveWorkflow(
 | `resolveBackendConnection`, `collectBackendEnvProblems`, `collectUnknownBackendProblems`, `collectBackendReferenceList`, `BackendMap` | The `backends:` map (§1.3): id → connection, its `${VARIABLE}` interpolation, and the two verify-time diagnostics. |
 | `applySeedOverrides`, `seedOverrideLayerFor`, `summarizeAppliedSeedOverrides`, `collectSeedOverridePathProblems`, `SeedOverrideLayer`, `SeedOverrideMap` | The `seedOverrides:`/`--seed` layers (§1.4): the merge, its diagnostics, and the key-plus-source summary that is echoed and logged. |
 | `createOtelSink`, `OTEL_ATTRIBUTE`, `OTEL_METRIC`, `RUN_SPAN_NAME` | The OpenTelemetry bridge (§6) and the `rawbox.*` names it writes. |
-| `parseConfig` | YAML/JSON document parsing (returns `any`; validate the result). |
+| `parseConfig` | YAML/JSON document parsing. Returns `Result<unknown, string>` — an `Err` naming the file on malformed content, never a throw; validate the value. |
 | `Workflow`, `Workspace`, `Step`, `ResolvedWorkflow`, `ResolvedStep`, `RawboxLock`, `DOCUMENT_KIND`, `FORMAT_VERSION` | Schemas and constants. |
 | `WorkspaceSource`, `setupNpmPackage` | Workspace-less ("scratch") runs (§1.1): the `runWorkflowInstance` seam, and the bare install step `setupWorkspace` composes from — useful directly when the caller has a single workflow's `plugins:` map rather than a workspace document to merge. |
 

@@ -236,8 +236,11 @@ export const BOOTSTRAP_STAGE = {
    * Constructing the box store the run will write through.
    *
    * Distinct from {@link BOOTSTRAP_STAGE.SEED} because it fails *before* a
-   * store exists, not while using one: the document declares a storage strategy
-   * this build has no implementation wired for (`workflow/store-support.ts`).
+   * store exists, not while using one. Two causes share it: the document
+   * declares a storage strategy this build has no implementation wired for
+   * (`workflow/store-support.ts`), or the LMDB environment itself could not be
+   * opened (`BoxStoreLmdb.create` returned an `Err` — the data path is a file,
+   * the directory is unwritable, lmdb reports a corrupt or locked map).
    * It is its own stage rather than folded into `resolve` because the document
    * resolved perfectly well — what is missing is in this binary, not in the
    * file, and that is exactly the distinction this field exists to carry

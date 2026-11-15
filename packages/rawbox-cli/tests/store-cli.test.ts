@@ -116,7 +116,7 @@ async function makeFixture(name: string): Promise<Fixture> {
   );
 
   const dataUrl = pathToFileURL(`${path.join(workspaceDir, '.rawbox', 'data')}/`);
-  const store = BoxStoreLmdb.create(name, dataUrl);
+  const store = BoxStoreLmdb.create(name, dataUrl)._unsafeUnwrap();
 
   const put = (key: string, content: unknown, strategy: BoxStrategy): void => {
     const location: BoxLocation = { workspace: name, workflow: 'example', key, strategy };
@@ -277,7 +277,7 @@ describe('store get', () => {
 
     // Baseline depth, read directly off the store before the CLI touches it.
     const dataUrl = pathToFileURL(`${path.join(fixture.workspaceDir, '.rawbox', 'data')}/`);
-    const beforeStore = BoxStoreLmdb.create(fixture.workspaceName, dataUrl);
+    const beforeStore = BoxStoreLmdb.create(fixture.workspaceName, dataUrl)._unsafeUnwrap();
     const location: BoxLocation = {
       workspace: fixture.workspaceName,
       workflow: 'example',
@@ -294,7 +294,7 @@ describe('store get', () => {
       output: 'json',
     });
 
-    const afterStore = BoxStoreLmdb.create(fixture.workspaceName, dataUrl);
+    const afterStore = BoxStoreLmdb.create(fixture.workspaceName, dataUrl)._unsafeUnwrap();
     const depthAfter = afterStore.depthSync(location)._unsafeUnwrap();
     const elementsAfter = afterStore.peekAllSync(location)._unsafeUnwrap();
     await afterStore.dbiCache.env.close();

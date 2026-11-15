@@ -363,7 +363,7 @@ describe('e2e — run', () => {
     const store = BoxStoreLmdb.create(
       WORKSPACE_NAME,
       pathToFileURL(path.join(workspaceDir, '.rawbox', 'data')),
-    );
+    )._unsafeUnwrap();
     const read = (key: string) =>
       store.getSync({
         key,
@@ -549,7 +549,7 @@ async function fillToBudget(options: {
   const storage: BoxStorage = { defaultStrategy: strategy, strategies };
   const budget = budgetForStorage(storage);
 
-  const store = BoxStoreLmdb.create(BUDGET_WORKSPACE, pathToFileURL(`${dataDir}/`));
+  const store = BoxStoreLmdb.create(BUDGET_WORKSPACE, pathToFileURL(`${dataDir}/`))._unsafeUnwrap();
 
   const content = payloadOfPackedSize(valueSizeMax, kind);
   // One write per declared slot: `lmdb-kv` is one entry, `lmdb-fifo` is the
@@ -890,7 +890,7 @@ describe('e2e — T14: a budgeted fill of incompressible values stays inside its
       strategies: { key0: strategy, key1: strategy, key2: strategy, key3: strategy },
     });
 
-    const store = BoxStoreLmdb.create(BUDGET_WORKSPACE, pathToFileURL(`${dataDir}/`));
+    const store = BoxStoreLmdb.create(BUDGET_WORKSPACE, pathToFileURL(`${dataDir}/`))._unsafeUnwrap();
 
     const content = payloadOfPackedSize(2022, 'incompressible');
     let lastError = '';

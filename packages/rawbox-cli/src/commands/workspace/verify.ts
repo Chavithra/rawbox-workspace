@@ -151,7 +151,11 @@ async function collectWorkspaceWorkflowNames(
   for (const workflowPath of workflowPathList) {
     try {
       const fullPath = resolveWorkspaceWorkflowPath(workspaceDirectory, workflowPath);
-      const document = parseConfig(await fs.readFile(fullPath, 'utf-8'), fullPath);
+      const parsed = parseConfig(await fs.readFile(fullPath, 'utf-8'), fullPath);
+      if (parsed.isErr()) {
+        continue;
+      }
+      const document = parsed.value;
       const typeResult = validateWorkflowType(document, workflowPath);
       if (typeResult.isOk()) {
         nameSet.add((document as Workflow).name);
@@ -191,7 +195,14 @@ export async function verifyWorkspace(workspacePath: string): Promise<void> {
 
   try {
     const content = await fs.readFile(absolutePath, 'utf-8');
-    const document = parseConfig(content, absolutePath);
+    const parsed = parseConfig(content, absolutePath);
+    if (parsed.isErr()) {
+      s.error('Validation failed.');
+      p.log.error(pc.red(parsed.error));
+      process.exit(1);
+      return;
+    }
+    const document = parsed.value;
 
     // -- 1. Document identity ----------------------------------------------
     // `kind` is required: a workspace without it is undiscoverable, so this is
@@ -236,7 +247,7 @@ export async function verifyWorkspace(workspacePath: string): Promise<void> {
     //
     // An unset variable is an **error**, not a warning. The failure being
     // designed out is a run that connects to `localhost` — or to a URL with an
-    // empty password — because `${REDIS_URL}` expanded to nothing: a store that
+    // empty password — because `${BACKEND_URL}` expanded to nothing: a store that
     // answers the wrong questions is worse than one that will not open, and a
     // warning is a thing a script ignores.
     let hasError = false;
@@ -351,16 +362,15 @@ export async function verifyWorkspace(workspacePath: string): Promise<void> {
         continue;
       }
 
-      let workflowDocument: unknown;
-      try {
-        workflowDocument = parseConfig(workflowContent, workflowFullPath);
-      } catch (error) {
+      const parsedWorkflow = parseConfig(workflowContent, workflowFullPath);
+      if (parsedWorkflow.isErr()) {
         p.log.error(
-          pc.red(`Workflow file ${workflowPath} could not be parsed: ${getErrorMessage(error)}`),
+          pc.red(`Workflow file ${workflowPath} could not be parsed: ${parsedWorkflow.error}`),
         );
         hasError = true;
         continue;
       }
+      const workflowDocument: unknown = parsedWorkflow.value;
 
       const typeResult = validateWorkflowType(workflowDocument, workflowPath);
       if (typeResult.isErr()) {

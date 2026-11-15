@@ -35,23 +35,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    # The Redis-backed suites skip themselves when no server is reachable, which
-    # is right for a laptop and wrong for a release: 36 tests would silently not
-    # run at the one moment they matter most. `REDIS_URL` below is what the test
-    # harness looks for first.
     services:
-      redis:
-        image: redis:8-alpine
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: rawbox
+          POSTGRES_PASSWORD: rawbox
+          POSTGRES_DB: rawbox
         ports:
-          - 6379:6379
+          - 5432:5432
         options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-
-    env:
-      REDIS_URL: redis://localhost:6379
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -80,6 +77,8 @@ jobs:
       - run: npm run lint
 
       - run: npm run test:all
+        env:
+          PG_URL: postgresql://rawbox:rawbox@127.0.0.1:5432/rawbox
 
       # Publishing five packages is not atomic. If the third fails, the first
       # two are already public and immutable. This asks the registry first, so
@@ -139,11 +138,9 @@ jobs:
           printf '@rawbox:registry=%s\n' "${REGISTRY}" > .npmrc
           npm install "@rawbox/cli@${version}"
 
-          # Assert the resolved tree, not `--version`. `rawbox-cli --version`
-          # reports the *consuming project's* version — there is no explicit
-          # yargs `.version()`, so it walks up from the cwd and finds whatever
-          # package.json it was installed into. Checking it here would assert
-          # nothing about what was published.
+          # Assert the resolved tree directly rather than relying on `--version`
+          # alone, verifying every internal dependency range resolved to the
+          # tagged release.
           # Read the manifest as a FILE, not through module resolution: these
           # packages declare `exports` without a `./package.json` subpath, so
           # `require('@rawbox/runner/package.json')` throws

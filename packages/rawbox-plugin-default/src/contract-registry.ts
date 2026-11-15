@@ -186,7 +186,6 @@ const controlFlowRecord = {
     type: 'control-flow',
     description: 'Jumps to the given step label',
     inputSchema: Type.Object({
-      condition: Type.Boolean(),
       label: Type.String(),
     }),
     errorSchema: Type.Object({

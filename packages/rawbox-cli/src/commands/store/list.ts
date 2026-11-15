@@ -66,7 +66,7 @@ function declaredViewFor(
   }
 
   const hasQueueSizeMax =
-    declared.strategy.name === 'lmdb-fifo' || declared.strategy.name === 'redis-fifo';
+    declared.strategy.name === 'lmdb-fifo' || declared.strategy.name === 'pg-fifo';
 
   return {
     source: declared.source,
@@ -77,15 +77,13 @@ function declaredViewFor(
 
 /**
  * The declared queue capacity for `key`, via `seedCapacityOf` on the FULL
- * declared strategy — `queueSizeMax - 1` for `lmdb-fifo`'s ring,
- * `queueSizeMax` unreduced for `redis-fifo`'s native list (`@rawbox/store`,
+ * declared strategy — `queueSizeMax - 1` for `lmdb-fifo`'s ring (`@rawbox/store`,
  * `strategy/descriptor.ts`). Deliberately a separate lookup from
  * {@link declaredViewFor} rather than a field folded into its `DeclaredView`:
  * that return value is serialised verbatim into `store list --output json`'s
  * `declared` field (`buildListRow` below), and adding a field there would be
- * a JSON output shape change for the plain-LMDB path this task must leave
- * untouched. `row.fifo.capacity` is the existing, already-stable field this
- * number feeds instead.
+ * a JSON output shape change. `row.fifo.capacity` is the existing,
+ * already-stable field this number feeds instead.
  */
 function declaredCapacityFor(
   declaredIndex: DeclaredIndex | undefined,
@@ -115,11 +113,6 @@ export async function storeListCommand(
       ? await buildDeclaredIndex(target.workspaceDocPath, target.workspaceDoc)
       : undefined;
 
-  // Every LMDB-only workspace — which is every workspace with no `backends:`
-  // block, and therefore every workspace this command served before task #13
-  // — takes this branch, byte-for-byte unchanged from before Redis
-  // observation existed. See `../../store/observers.ts`'s module comment for
-  // why the merge below is not reached from here.
   if (!hasDeclaredBackends(target)) {
     const openResult = BoxObserverLmdb.openSync(target.workspaceName, target.dataRootUrl);
     if (openResult.isErr()) {
@@ -172,17 +165,10 @@ export async function storeListCommand(
     return;
   }
 
-  // A `backends:` block is declared: merge the LMDB environment (if one
-  // exists) with one `BoxObserverRedis` per backend — see
-  // `../../store/observers.ts`.
   const observerSet = await openWorkspaceObserverSet(target);
 
   try {
-    // Printed before anything that might exit early below, so a workspace
-    // whose only problem IS an unreachable/unresolvable backend says why —
-    // rather than that reason getting silently dropped behind a generic "no
-    // workflows found" error.
-    for (const warning of observerSet.redisWarningList) {
+    for (const warning of observerSet.backendWarningList) {
       p.log.warn(pc.yellow(warning));
     }
 
@@ -219,7 +205,7 @@ export async function storeListCommand(
   }
 }
 
-/** One `ListRow` from an enumerated entry and its declared view — shared by both the LMDB-only and the merged path, so the two agree on shape by construction. */
+/** Builds one `ListRow` from an enumerated entry and its declared view. */
 function buildListRow(
   workflow: string,
   entry: Pick<
@@ -247,7 +233,7 @@ function buildListRow(
   };
 }
 
-/** Text/JSON rendering, identical for both paths above. */
+/** Renders the listing result as text or JSON. */
 function printListResult(
   rowList: readonly ListRow[],
   options: StoreListOptions,

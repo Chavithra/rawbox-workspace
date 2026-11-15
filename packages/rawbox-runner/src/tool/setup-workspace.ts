@@ -80,7 +80,11 @@ export async function loadAndValidateWorkspace(workspacePath: string): Promise<R
   
   try {
     const content = await fs.readFile(absoluteWorkspacePath, 'utf-8');
-    const workspaceData = parseConfig(content, absoluteWorkspacePath);
+    const parsed = parseConfig(content, absoluteWorkspacePath);
+    if (parsed.isErr()) {
+      return err(parsed.error);
+    }
+    const workspaceData: unknown = parsed.value;
 
     // Identity before schema, for the same reason `validateWorkflowType` checks
     // it first: a document with no `kind:` is missing exactly one line, and
@@ -116,15 +120,28 @@ export async function loadAndValidateWorkspace(workspacePath: string): Promise<R
  * An unreadable or invalid document falls back to the workspace directory
  * rather than failing: every caller already reports document problems through
  * its own validation path, and none of them should die inside a path lookup.
+ * The fallback is **named**, though — `fallbackReason` carries why — because a
+ * document that declares `targetFolder: ../shared` and has one schema error
+ * would otherwise send plugin resolution and the LMDB data directory
+ * somewhere its author never wrote, with nothing saying so.
  */
+export interface ResolvedWorkspaceTargetFolder {
+  readonly targetFolder: string;
+  /**
+   * Set when the workspace document could not be loaded and `targetFolder`
+   * is the workspace directory by fallback rather than by declaration.
+   */
+  readonly fallbackReason?: string;
+}
+
 export async function resolveWorkspaceTargetFolder(
   workspacePath: string,
-): Promise<string> {
+): Promise<ResolvedWorkspaceTargetFolder> {
   const workspaceDir = path.dirname(path.resolve(workspacePath));
   const workspaceResult = await loadAndValidateWorkspace(workspacePath);
   return workspaceResult.isOk()
-    ? resolveTargetFolder(workspaceDir, workspaceResult.value)
-    : workspaceDir;
+    ? { targetFolder: resolveTargetFolder(workspaceDir, workspaceResult.value) }
+    : { targetFolder: workspaceDir, fallbackReason: workspaceResult.error };
 }
 
 /**
@@ -161,7 +178,11 @@ export async function loadAndValidateWorkflows(workspacePath: string, workspace:
     );
     try {
       const content = await fs.readFile(absoluteWorkflowPath, 'utf-8');
-      const workflowData: unknown = parseConfig(content, absoluteWorkflowPath);
+      const parsed = parseConfig(content, absoluteWorkflowPath);
+      if (parsed.isErr()) {
+        return err(`Workflow "${relWorkflowPath}" could not be parsed: ${parsed.error}`);
+      }
+      const workflowData: unknown = parsed.value;
 
       const typeResult = validateWorkflowType(workflowData, absoluteWorkflowPath);
       if (typeResult.isErr()) {

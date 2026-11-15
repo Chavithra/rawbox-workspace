@@ -36,7 +36,7 @@ name: launch
 description: "Optional, free text."
 
 plugins:
-  "@rawbox/rawbox-plugin-default": "^1.0.0"
+  "@rawbox/rawbox-plugin-default": "^0.1.0"
 
 storage:
   defaultStrategy: { name: lmdb-kv, valueSizeMax: 1900 }
@@ -76,7 +76,7 @@ Package name → npm dependency specifier, exactly the shape of `dependencies` i
 
 ```yaml
 plugins:
-  "@rawbox/rawbox-plugin-default": "^1.0.0"                  # registry
+  "@rawbox/rawbox-plugin-default": "^0.1.0"                  # registry
   "@acme/rawbox-plugin-kraken": "file:../packages/kraken"    # local path
   "@acme/rawbox-plugin-exp": "git+https://…/exp.git#main"    # git
 ```
@@ -116,8 +116,8 @@ have been **removed** (§5).
 | --- | --- | --- |
 | `lmdb-kv` | `valueSizeMax` | A value cell in the workspace's LMDB environment |
 | `lmdb-fifo` | `queueSizeMax`, `valueSizeMax` | A ring-buffer queue in that environment |
-| `redis-kv` | `valueSizeMax`, `backend` | A value cell on a Redis server |
-| `redis-fifo` | `queueSizeMax`, `valueSizeMax`, `backend` | A native Redis list |
+| `pg-kv` | `backend`, `valueSizeMax` | A value cell in a PostgreSQL backend (`rawbox_boxes`) |
+| `pg-fifo` | `backend`, `queueSizeMax`, `valueSizeMax` | A FIFO queue in a PostgreSQL backend (`rawbox_fifo_items`) |
 
 Every field listed is **required** for that strategy. A `name` outside this set MUST be
 rejected, as MUST a field belonging to a different strategy.
@@ -125,8 +125,8 @@ rejected, as MUST a field belonging to a different strategy.
 - **`valueSizeMax`** — integer `1 … 2147483647`. Bounds **one stored value**, measured as its
   msgpack encoding before compression. Enforced on write by every strategy.
 - **`queueSizeMax`** — the queue's capacity in entries. `lmdb-fifo` requires `≥ 2` and holds
-  `queueSizeMax - 1` (one slot distinguishes full from empty); `redis-fifo` requires `≥ 1`
-  and holds `queueSizeMax`. No power-of-two constraint.
+  `queueSizeMax - 1` (one slot distinguishes full from empty). `pg-fifo` requires `≥ 1` and
+  holds `queueSizeMax` entries exact. No power-of-two constraint.
 - **`backend`** — a non-empty id naming an entry of the **workspace's** `backends` map
   (§3.1). Never a connection string.
 
@@ -141,14 +141,14 @@ A step input bound to a queue therefore receives **one entry per read**, not the
 
 **Every key a workflow names MUST resolve to one store.** A step's write and the next step's
 read share a transaction, and a transaction does not span two stores. `lmdb-*` keys share the
-workspace's environment; a `redis-*` key's store is the server its `backend` id names, so two
-ids are two stores.
+workspace's environment; a backend-configured strategy's store is what its `backend` id names,
+so two ids are two stores.
 
 #### 2.2.2. `seed`
 
 The key's value before the first step runs, applied on **every** run.
 
-- For a strategy whose writes **append** (`lmdb-fifo`, `redis-fifo`), `seed` MUST be a
+- For a strategy whose writes **append** (`lmdb-fifo`, `pg-fifo`), `seed` MUST be a
   **list**: each element becomes one entry, in order. `[]` seeds an empty queue.
 - `valueSizeMax` bounds **one element**, not the list.
 - The element count MUST NOT exceed the strategy's capacity (§2.2.1).
@@ -232,7 +232,7 @@ workflowPathList:
 targetFolder: .rawbox
 backends:
   main:
-    connection: "redis://cache.internal:6379/${REDIS_PASSWORD}"
+    connection: "tcp://store.internal:9000/${BACKEND_PASSWORD}"
 seedOverrides:
   ./workflows/launch.workflow.yaml:
     tick_ms: 250
@@ -402,10 +402,6 @@ without running anything.
 A diagnostic names the offending thing, the document path it was declared at, and what to do.
 An unrecognised field is reported as that field — never as a list of the shapes the value
 failed to be.
-
-Two strategies, `redis-kv` and `redis-fifo`, are **declarable and verifiable but not
-runnable** in this release: no Redis store is wired into the run path, so a run declaring one
-is refused by name before anything is opened or written.
 
 ## 5. Removed forms
 
