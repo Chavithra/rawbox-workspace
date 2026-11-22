@@ -46,7 +46,7 @@ function makeWorkflow(block: Record<string, unknown>, name = 'example'): Workflo
     kind: 'Workflow',
     formatVersion: '1.0',
     name,
-    plugins: {},
+    dependencies: {},
     storage: { defaultStrategy: KV, ...block },
     steps: [],
   } as unknown as Workflow;

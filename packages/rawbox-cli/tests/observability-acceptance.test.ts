@@ -37,11 +37,11 @@ import { fileURLToPath } from 'node:url';
 // workflow is spawned — still good practice, since it means none of the
 // three has to wait on auto-setup before this suite's own timing-sensitive
 // assertions (the heartbeat window, the loop-gate halt) start running. It is
-// no longer a race workaround, though: concurrent auto-setup against one
-// target folder is now guarded by an exclusive per-target-folder lock
+// no longer a race workaround, though: concurrent auto-setup into one
+// dependency env is guarded by an exclusive per-env lock
 // (`commands/workflow/setup-lock.ts`/`auto-setup.ts`) — see
 // `auto-setup-race.test.ts` for the scenario this fixed, three real
-// concurrent `run` processes sharing one *uninstalled* workspace.
+// concurrent `run` processes sharing one *uninstalled* env.
 // ---------------------------------------------------------------------------
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -79,7 +79,7 @@ formatVersion: "1.0"
 name: loop-a
 description: "Acceptance fixture: throttle + increment + loop-gate."
 
-plugins:
+dependencies:
   "${PLUGIN_PACKAGE}": "file:${PLUGIN_DIR}"
 
 storage:
@@ -139,7 +139,7 @@ formatVersion: "1.0"
 name: loop-fifo
 description: "Acceptance fixture: throttle + increment + loop-gate, with a FIFO history key."
 
-plugins:
+dependencies:
   "${PLUGIN_PACKAGE}": "file:${PLUGIN_DIR}"
 
 storage:
@@ -221,7 +221,7 @@ formatVersion: "1.0"
 name: loop-heartbeat
 description: "Acceptance fixture: throttle + increment + a long sleep + unconditional jump."
 
-plugins:
+dependencies:
   "${PLUGIN_PACKAGE}": "file:${PLUGIN_DIR}"
 
 storage:
@@ -415,8 +415,8 @@ describe('observability acceptance — a multi-workflow workspace inspected from
     await expect(fs.stat(CLI_ENTRY)).resolves.toBeDefined();
 
     // Install the plugin exactly once, before any workflow starts, so three
-    // concurrently-starting run processes never race auto-setup against the
-    // one target folder they share (see the file header).
+    // concurrently-starting run processes never wait on auto-setup (see the
+    // file header).
     const setupResult = await runCli(['workspace', 'setup', workspaceFile]);
     expect(setupResult.code, setupResult.stderr).toBe(0);
 

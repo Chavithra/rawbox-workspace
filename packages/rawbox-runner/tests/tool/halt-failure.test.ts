@@ -74,7 +74,7 @@ async function runHaltScenario(
       'formatVersion: "1.0"',
       `name: ${name}-workflow`,
       '',
-      'plugins:',
+      'dependencies:',
       `  "${DEFAULT_PLUGIN}": "*"`,
       '',
       'storage:',

@@ -27,16 +27,16 @@ export const FormatVersion = Type.Literal(FORMAT_VERSION);
 export type FormatVersion = Static<typeof FormatVersion>;
 
 /**
- * `plugins:` — package name → npm dependency specifier, exactly the shape of
+ * `dependencies:` — package name → npm dependency specifier, exactly the shape of
  * `dependencies` in a `package.json`. The specifier carries the source, so
  * there is no `source:` or `path:` field. Integrity hashes live in
  * `rawbox.lock`, never here.
  */
-export const PluginSpecifierRecord = Type.Record(
+export const DependencySpecifierRecord = Type.Record(
   Type.String(),
   Type.String({ minLength: 1 }),
 );
-export type PluginSpecifierRecord = Static<typeof PluginSpecifierRecord>;
+export type DependencySpecifierRecord = Static<typeof DependencySpecifierRecord>;
 
 /**
  * One entry of `storage.keys` — **everything one key's declaration says, in one
@@ -138,7 +138,7 @@ export const Workflow = StrictObject({
   formatVersion: FormatVersion,
   name: Type.String({ minLength: 1 }),
   description: Type.Optional(Type.String()),
-  plugins: PluginSpecifierRecord,
+  dependencies: DependencySpecifierRecord,
   storage: Storage,
   steps: Type.Array(Step),
 });

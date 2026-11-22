@@ -51,7 +51,7 @@ const MINIMAL_WORKFLOW = (name: string): string =>
 kind: Workflow
 formatVersion: "1.0"
 name: ${name}
-plugins: {}
+dependencies: {}
 storage:
   defaultStrategy:
     name: lmdb-kv
@@ -285,7 +285,7 @@ describe('workspace status — end to end', () => {
 kind: Workflow
 formatVersion: "1.0"
 name: e2e-workflow
-plugins:
+dependencies:
   "${PLUGIN_PACKAGE}": "file:${PLUGIN_DIR}"
 storage:
   defaultStrategy:

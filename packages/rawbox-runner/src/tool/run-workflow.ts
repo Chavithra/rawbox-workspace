@@ -20,6 +20,7 @@ import {
   type SkippedPlugin,
 } from '../workflow/plugin-discoverer.js';
 import { resolveTargetFolder } from '../workspace/workspace-types.js';
+import { resolveDependencyEnvDir } from '../workflow/dependency-env.js';
 import {
   collectLogRotationProblems,
   type ResolvedLogRotate,
@@ -679,26 +680,32 @@ async function executeWorkflowRun(
   // cache are produced together and cannot disagree. That is what makes the
   // resolver's "stale map" diagnostic unreachable from this path.
   //
-  // Resolution bases, in order: the workspace's *target folder* — where
-  // `workspace setup` installed the declared plugins — then the workspace
-  // directory (a `node_modules` next to `workspace.yaml` or anywhere above it),
-  // then the process cwd. Node's own resolution, relative to this module,
-  // remains the last resort.
+  // Resolution bases, in order: this workflow's *env* —
+  // `<targetFolder>/envs/<hash>/`, where setup installed exactly the
+  // `dependencies:` map it declares — then the workspace's target folder, then
+  // the workspace directory (a `node_modules` next to `workspace.yaml` or
+  // anywhere above it), then the process cwd. Node's own resolution, relative
+  // to this module, remains the last resort.
   //
-  // The target folder leads because it is the only base that is authoritative:
-  // it is where setup put the packages this very workflow declared. A plugin
-  // installed *only* into a separate target folder is otherwise unresolvable
-  // from any cwd but that folder. The default target is
-  // `<workspaceDir>/.rawbox`, so a workspace that never declares `targetFolder:`
-  // still resolves and installs to the same place.
+  // The env leads because it is the only base that is authoritative: it holds
+  // the versions this very workflow pinned, while a sibling workflow's env or
+  // a hoisted `node_modules` may hold the same package at another version.
+  // The default target is `<workspaceDir>/.rawbox`, so a workspace that never
+  // declares `targetFolder:` still resolves and installs to the same place.
   const resolvedTargetFolder = resolveTargetFolder(workspaceDir, workspace);
+  const envDir = resolveDependencyEnvDir(
+    resolvedTargetFolder,
+    authoredWorkflow.dependencies,
+    workspaceDir,
+  );
 
   const contractRegistryCache = new ContractRegistryCache();
   const pluginLoad = await PluginDiscoverer.loadPlugins(
-    Object.keys(authoredWorkflow.plugins),
+    Object.keys(authoredWorkflow.dependencies),
     contractRegistryCache,
     {
       resolveFrom: dedupePathList([
+        ...(envDir ? [envDir] : []),
         resolvedTargetFolder,
         workspaceDir,
         process.cwd(),

@@ -96,7 +96,7 @@ describe('run registry — end-to-end lifecycle', () => {
 kind: Workflow
 formatVersion: "1.0"
 name: lifecycle-ok-workflow
-plugins:
+dependencies:
   "${PLUGIN_PACKAGE}": "file:${PLUGIN_DIR}"
 storage:
   defaultStrategy:
@@ -158,7 +158,7 @@ steps:
 kind: Workflow
 formatVersion: "1.0"
 name: lifecycle-error-workflow
-plugins:
+dependencies:
   "${PLUGIN_PACKAGE}": "file:${PLUGIN_DIR}"
 storage:
   defaultStrategy:
@@ -197,7 +197,7 @@ steps:
 kind: Workflow
 formatVersion: "1.0"
 name: lifecycle-bootstrap-failed-workflow
-plugins:
+dependencies:
   "rawbox-plugin-nonexistent-e2e": "file:${path.join(rootDir, 'no-such-plugin-dir')}"
 storage:
   defaultStrategy:

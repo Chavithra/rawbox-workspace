@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import * as p from '@clack/prompts';
 import yargs from 'yargs';
 
+import { DEPENDENCY_ENV_READY_FILENAME, resolveDependencyEnvDir } from '@rawbox/runner';
+
 import { runCommandDefinition, runWorkflowCommand } from '../src/commands/workflow/run.js';
 
 // ---------------------------------------------------------------------------
@@ -12,13 +14,12 @@ import { runCommandDefinition, runWorkflowCommand } from '../src/commands/workfl
 // (rawbox-cli README, "Execute Workflow (`run` / `workflow run`)").
 //
 // These fixtures declare `@rawbox/rawbox-plugin-default` by an absolute
-// `file:` specifier, but — as `e2e.test.ts` and
-// `packages/rawbox-runner/tests/target-folder.test.ts` both note — the
-// package name resolves from this monorepo's own hoisted `node_modules` by
-// walking up from the workspace directory, whether or not anything was
-// `npm install`ed into a target folder. So these scenarios run to real
-// completion with no `workspace setup` step: the specifier text is never
-// consulted at run time, only the package name is.
+// `file:` specifier, so the first run's auto-setup links the real built
+// plugin into the workflow's env, `.rawbox/envs/<hash>/`, and the scenarios
+// run to real completion with no `workspace setup` step. The package name
+// also resolves from this monorepo's own hoisted `node_modules`, which is why
+// auto-setup decides on the env's ready marker rather than on name
+// resolution alone.
 // ---------------------------------------------------------------------------
 
 /**
@@ -106,7 +107,7 @@ function workflowYaml(): string {
 kind: Workflow
 formatVersion: "1.0"
 name: ${WORKFLOW_NAME}
-plugins:
+dependencies:
   "${PLUGIN_PACKAGE}": "file:${PLUGIN_DIR}"
 storage:
   defaultStrategy:
@@ -213,7 +214,7 @@ function autosetupWorkflowYaml(): string {
 kind: Workflow
 formatVersion: "1.0"
 name: ${AUTOSETUP_WORKFLOW_NAME}
-plugins:
+dependencies:
   "${AUTOSETUP_PLUGIN}": "file:${autosetupPluginDir}"
 storage:
   defaultStrategy:
@@ -242,6 +243,15 @@ steps:
     errors:
       message: halt_error
 `.trim();
+}
+
+/** `<directory>/.rawbox/envs/<hash>`, the env auto-setup installs {@link AUTOSETUP_PLUGIN} into. */
+function autosetupEnvDir(directory: string): string {
+  return resolveDependencyEnvDir(
+    path.join(directory, '.rawbox'),
+    { [AUTOSETUP_PLUGIN]: `file:${autosetupPluginDir}` },
+    directory,
+  ) as string;
 }
 
 /** Builds `<root>/<name>/{workspace.yaml,workflows/example.workflow.yaml}` declaring {@link AUTOSETUP_PLUGIN}. */
@@ -276,7 +286,7 @@ function scratchWorkflowYaml(name: string): string {
 kind: Workflow
 formatVersion: "1.0"
 name: ${name}
-plugins:
+dependencies:
   "${AUTOSETUP_PLUGIN}": "file:${autosetupPluginDir}"
 storage:
   defaultStrategy:
@@ -361,7 +371,7 @@ describe('workflow run — workspace resolution', () => {
 kind: Workflow
 formatVersion: "1.0"
 name: no-workspace-workflow
-plugins: {}
+dependencies: {}
 storage:
   defaultStrategy:
     name: lmdb-kv
@@ -502,7 +512,7 @@ function failingHaltWorkflowYaml(): string {
 kind: Workflow
 formatVersion: "1.0"
 name: ${WORKFLOW_NAME}
-plugins:
+dependencies:
   "${PLUGIN_PACKAGE}": "file:${PLUGIN_DIR}"
 storage:
   defaultStrategy:
@@ -573,10 +583,10 @@ describe('workflow run — auto-setup (rawbox-cli README, "Execute Workflow (`ru
     expect(reported()).toContain('Auto-setup');
     expect(reported()).toContain(AUTOSETUP_PLUGIN);
 
-    // `.rawbox/` appeared, with the plugin actually installed into it.
+    // `.rawbox/envs/<hash>/` appeared, with the plugin actually installed into it.
     const targetFolder = path.join(scenario.directory, '.rawbox');
     const installedManifest = await fs.stat(
-      path.join(targetFolder, 'node_modules', AUTOSETUP_PLUGIN, 'package.json'),
+      path.join(autosetupEnvDir(scenario.directory), 'node_modules', AUTOSETUP_PLUGIN, 'package.json'),
     );
     expect(installedManifest.isFile()).toBe(true);
 
@@ -597,11 +607,11 @@ describe('workflow run — auto-setup (rawbox-cli README, "Execute Workflow (`ru
     expectPassed();
     expect(reported()).toContain('Auto-setup');
 
-    // `setupNpmPackage` unconditionally rewrites `package.json` whenever it
-    // runs, so its mtime is a reliable witness for "did setup run again" —
-    // it is untouched by an ordinary run, which never writes into `.rawbox/`
-    // itself beyond `data/` and `logs/`.
-    const packageJsonPath = path.join(scenario.directory, '.rawbox', 'package.json');
+    // `setupDependencyEnv` unconditionally rewrites the env's `package.json`
+    // whenever it runs, so its mtime is a reliable witness for "did setup run
+    // again" — it is untouched by an ordinary run, which never writes into
+    // `.rawbox/` itself beyond `data/` and `logs/`.
+    const packageJsonPath = path.join(autosetupEnvDir(scenario.directory), 'package.json');
     const mtimeAfterFirstRun = (await fs.stat(packageJsonPath)).mtimeMs;
 
     messageList = [];
@@ -623,10 +633,9 @@ describe('workflow run — auto-setup (rawbox-cli README, "Execute Workflow (`ru
     expect(reported()).toContain(AUTOSETUP_PLUGIN);
 
     // No install was ever attempted — `.rawbox/` may still exist (the failed
-    // run's own log directory lands there), but never a `package.json`, which
-    // only `setupWorkspace` ever writes.
+    // run's own log directory lands there), but never an env.
     await expect(
-      fs.stat(path.join(scenario.directory, '.rawbox', 'package.json')),
+      fs.stat(path.join(scenario.directory, '.rawbox', 'envs')),
     ).rejects.toThrow();
   }, 60_000);
 
@@ -636,7 +645,7 @@ describe('workflow run — auto-setup (rawbox-cli README, "Execute Workflow (`ru
     await runWorkflowCommand(scenario.workflowPath);
     expectPassed();
 
-    const packageJsonPath = path.join(scenario.directory, '.rawbox', 'package.json');
+    const packageJsonPath = path.join(autosetupEnvDir(scenario.directory), 'package.json');
     const mtimeAfterFirstRun = (await fs.stat(packageJsonPath)).mtimeMs;
 
     // A margin against coarse filesystem mtime resolution, so a genuine
@@ -650,6 +659,204 @@ describe('workflow run — auto-setup (rawbox-cli README, "Execute Workflow (`ru
     expect(reported()).toContain('--setup passed');
     const mtimeAfterForcedRun = (await fs.stat(packageJsonPath)).mtimeMs;
     expect(mtimeAfterForcedRun).toBeGreaterThan(mtimeAfterFirstRun);
+  }, 180_000);
+
+  it('a workflow declaring no dependencies skips auto-setup and creates no env', async () => {
+    const directory = path.join(rootDir, 'autosetup-no-dependencies');
+    const workflowDir = path.join(directory, 'workflows');
+    await fs.mkdir(workflowDir, { recursive: true });
+    const workspacePath = path.join(directory, 'workspace.yaml');
+    const workflowPath = path.join(workflowDir, 'example.workflow.yaml');
+    await fs.writeFile(workspacePath, workspaceYaml('autosetup-no-dependencies'), 'utf-8');
+    await fs.writeFile(
+      workflowPath,
+      `
+kind: Workflow
+formatVersion: "1.0"
+name: no-dependencies
+dependencies: {}
+storage:
+  defaultStrategy:
+    name: lmdb-kv
+    valueSizeMax: 1900
+steps: []
+`.trim(),
+      'utf-8',
+    );
+
+    await runWorkflowCommand(workflowPath, { workspace: workspacePath });
+
+    // A workflow with no steps cannot execute, but it fails only once the
+    // run proper starts — past the auto-setup step, which had nothing to do.
+    expect(reported()).toContain('stepList');
+    expect(reported()).not.toContain('Auto-setup');
+    await expect(fs.stat(path.join(directory, '.rawbox', 'envs'))).rejects.toThrow();
+  }, 60_000);
+});
+
+// ---------------------------------------------------------------------------
+// One env per `dependencies:` map — auto-setup installs exactly the env the
+// workflow being run needs, and decides on the env's ready marker.
+// ---------------------------------------------------------------------------
+
+describe('workflow run — per-workflow dependency envs', () => {
+  const VERSIONED_PLUGIN = 'rawbox-plugin-versioned-e2e';
+  const VERSIONED_WORKFLOW_NAME = 'versioned-echo';
+
+  /**
+   * Clones the built default plugin into `<directory>/<version>` under
+   * {@link VERSIONED_PLUGIN}, with `value-ops/echo` patched to prefix its
+   * output with `<version>:` — so a run's own output names the install it
+   * really loaded.
+   */
+  async function buildVersionedPlugin(directory: string, version: string): Promise<void> {
+    const destination = path.join(directory, version);
+    await fs.cp(autosetupPluginDir, destination, { recursive: true });
+
+    const manifestPath = path.join(destination, 'package.json');
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf-8'));
+    manifest.name = VERSIONED_PLUGIN;
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+
+    const echoPath = path.join(destination, 'dist', 'value-ops', 'echo.definition.js');
+    const source = await fs.readFile(echoPath, 'utf-8');
+    const patched = source.replace('value: input.value', `value: \`${version}:\${input.value}\``);
+    expect(patched, 'echo definition was not in the expected form').not.toBe(source);
+    await fs.writeFile(echoPath, patched, 'utf-8');
+  }
+
+  function versionedWorkflowYaml(specifier: string): string {
+    return `
+kind: Workflow
+formatVersion: "1.0"
+name: ${VERSIONED_WORKFLOW_NAME}
+dependencies:
+  "${VERSIONED_PLUGIN}": "${specifier}"
+storage:
+  defaultStrategy:
+    name: lmdb-kv
+    valueSizeMax: 1900
+  keys:
+    greeting:
+      seed: hello
+steps:
+  - label: echo-step
+    plugin: "${VERSIONED_PLUGIN}"
+    operation: value-ops/echo
+    inputs:
+      value: greeting
+    outputs:
+      value: echoed
+`.trim();
+  }
+
+  /** The value the one `echo-step` produced, read from the run's log. */
+  async function echoedValue(logFile: string): Promise<unknown> {
+    const stepEnd = (await fs.readFile(logFile, 'utf-8'))
+      .split('\n')
+      .filter((line) => line.startsWith('{'))
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .find((event) => event['event'] === 'step.end');
+    return (stepEnd?.['output'] as Record<string, unknown> | undefined)?.['value'];
+  }
+
+  it("a sibling workflow's invalid declaration does not block running a valid one", async () => {
+    const directory = path.join(rootDir, 'env-fault-isolation');
+    const workflowDir = path.join(directory, 'workflows');
+    await fs.mkdir(workflowDir, { recursive: true });
+    const workspacePath = path.join(directory, 'workspace.yaml');
+    await fs.writeFile(
+      workspacePath,
+      [
+        'kind: Workspace',
+        'name: env-fault-isolation',
+        'workflowPathList:',
+        '  - ./workflows/a.workflow.yaml',
+        '  - ./workflows/b.workflow.yaml',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const workflowAPath = path.join(workflowDir, 'a.workflow.yaml');
+    await fs.writeFile(workflowAPath, autosetupWorkflowYaml(), 'utf-8');
+    await fs.writeFile(
+      path.join(workflowDir, 'b.workflow.yaml'),
+      `
+kind: Workflow
+formatVersion: "1.0"
+name: broken-sibling
+dependencies:
+  missing-pkg: "@@invalid@@"
+storage:
+  defaultStrategy:
+    name: lmdb-kv
+    valueSizeMax: 1900
+steps: []
+`.trim(),
+      'utf-8',
+    );
+
+    await runWorkflowCommand(workflowAPath);
+
+    expectPassed();
+    expect(reported()).toContain('Auto-setup');
+    expect(reported()).not.toContain('missing-pkg');
+
+    const envDirA = autosetupEnvDir(directory);
+    await expect(
+      fs.stat(path.join(envDirA, 'node_modules', AUTOSETUP_PLUGIN, 'package.json')),
+    ).resolves.toBeDefined();
+    // Only workflow A's env was ever created.
+    expect(await fs.readdir(path.join(directory, '.rawbox', 'envs'))).toEqual([
+      path.basename(envDirA),
+    ]);
+  }, 120_000);
+
+  it('after a specifier bump, installs the new env and runs the new version — even with the old one resolvable by name', async () => {
+    const directory = path.join(rootDir, 'env-version-bump');
+    const workflowDir = path.join(directory, 'workflows');
+    await fs.mkdir(workflowDir, { recursive: true });
+    await buildVersionedPlugin(directory, 'v1');
+    await buildVersionedPlugin(directory, 'v2');
+
+    const workspacePath = path.join(directory, 'workspace.yaml');
+    const workflowPath = path.join(workflowDir, 'example.workflow.yaml');
+    await fs.writeFile(workspacePath, workspaceYaml('env-version-bump'), 'utf-8');
+    await fs.writeFile(workflowPath, versionedWorkflowYaml('file:./v1'), 'utf-8');
+
+    const targetFolder = path.join(directory, '.rawbox');
+    const envDirFor = (specifier: string): string =>
+      resolveDependencyEnvDir(targetFolder, { [VERSIONED_PLUGIN]: specifier }, directory) as string;
+
+    const firstLog = path.join(directory, 'first.ndjson');
+    await runWorkflowCommand(workflowPath, { logFile: firstLog });
+    expectPassed();
+    expect(reported()).toContain('Auto-setup');
+    expect(await echoedValue(firstLog)).toBe('v1:hello');
+
+    // The stale-install hazard: the package name now also resolves from the
+    // target folder's own `node_modules` (still v1), on every walk up from
+    // the new env. Name resolution alone would call the bumped env ready.
+    await fs.mkdir(path.join(targetFolder, 'node_modules'), { recursive: true });
+    await fs.symlink(
+      path.join(directory, 'v1'),
+      path.join(targetFolder, 'node_modules', VERSIONED_PLUGIN),
+      'dir',
+    );
+
+    await fs.writeFile(workflowPath, versionedWorkflowYaml('file:./v2'), 'utf-8');
+
+    messageList = [];
+    const secondLog = path.join(directory, 'second.ndjson');
+    await runWorkflowCommand(workflowPath, { logFile: secondLog });
+    expectPassed();
+
+    const envDirV2 = envDirFor('file:./v2');
+    expect(envDirV2).not.toBe(envDirFor('file:./v1'));
+    expect(reported()).toContain('Auto-setup');
+    expect(reported()).toContain(envDirV2);
+    await expect(fs.stat(path.join(envDirV2, DEPENDENCY_ENV_READY_FILENAME))).resolves.toBeDefined();
+    expect(await echoedValue(secondLog)).toBe('v2:hello');
   }, 180_000);
 });
 
@@ -679,10 +886,19 @@ describe('workflow run — workspace-less scratch runs (--workspace-name)', () =
     // directory stands in as the workspace directory for a scratch run — with
     // the plugin actually installed into it.
     const targetFolder = path.join(scenario.directory, '.rawbox');
+    const envDir = autosetupEnvDir(scenario.directory);
     const installedManifest = await fs.stat(
-      path.join(targetFolder, 'node_modules', AUTOSETUP_PLUGIN, 'package.json'),
+      path.join(envDir, 'node_modules', AUTOSETUP_PLUGIN, 'package.json'),
     );
     expect(installedManifest.isFile()).toBe(true);
+
+    // Through the same per-env path a disk workspace takes: one finished env
+    // under `envs/`, and nothing installed into the target folder itself.
+    expect(reported()).toContain(envDir);
+    await expect(fs.stat(path.join(envDir, DEPENDENCY_ENV_READY_FILENAME))).resolves.toBeDefined();
+    expect(await fs.readdir(path.join(targetFolder, 'envs'))).toEqual([path.basename(envDir)]);
+    await expect(fs.stat(path.join(targetFolder, 'node_modules'))).rejects.toThrow();
+    await expect(fs.stat(path.join(targetFolder, 'package.json'))).rejects.toThrow();
 
     // And the run itself completed, with its LMDB environment keyed by the
     // `--workspace-name` value under `data/`.
@@ -754,7 +970,7 @@ describe('workflow run — workspace-less scratch runs (--workspace-name)', () =
 kind: Workflow
 formatVersion: "1.0"
 name: no-workspace-scratch-hint
-plugins: {}
+dependencies: {}
 storage:
   defaultStrategy:
     name: lmdb-kv
@@ -1050,7 +1266,7 @@ describe('workflow run — --heartbeat behaviour', () => {
 kind: Workflow
 formatVersion: "1.0"
 name: heartbeat-example
-plugins:
+dependencies:
   "${PLUGIN_PACKAGE}": "file:${PLUGIN_DIR}"
 storage:
   defaultStrategy:
@@ -1157,7 +1373,7 @@ describe('workflow run — --seed key=<json>', () => {
 kind: Workflow
 formatVersion: "1.0"
 name: ${SEED_WORKFLOW_NAME}
-plugins:
+dependencies:
   "${PLUGIN_PACKAGE}": "file:${PLUGIN_DIR}"
 storage:
   defaultStrategy:

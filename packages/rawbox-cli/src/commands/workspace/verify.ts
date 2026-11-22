@@ -5,7 +5,6 @@ import pc from 'picocolors';
 import { Compile } from 'typebox/compile';
 import {
   DOCUMENT_KIND,
-  RAWBOX_LOCK_FILENAME,
   Workspace,
   boxStorageFor,
   collectBackendEnvProblems,
@@ -45,85 +44,21 @@ const FILE_SPECIFIER_PREFIX = 'file:';
 
 
 // ---------------------------------------------------------------------------
-// Conflicting plugin specifiers
+// Declared plugin specifiers
 //
-// Plugins are declared per *workflow*, but `rawbox.lock` is keyed by package
-// name at the *workspace* level: one package, one resolved version, one
-// registry hash for the whole workspace. Two workflows in the same workspace
-// declaring different specifiers for the same package therefore cannot both be
-// honoured — one of them is silently going to run against the other's version.
-//
-// The install pipeline merges every workflow's `plugins:` map into a single
-// generated `package.json` with last-wins semantics, which makes the outcome
-// depend on `workflowPathList` ordering. That is unspecified behaviour, so it
-// is reported here as a workspace verification error rather than resolved by
-// coin flip.
+// Two workflows may declare different specifiers for one package: each
+// distinct `dependencies:` map installs into its own env, so both are
+// honoured. The index only gathers every distinct specifier once, for the
+// `file:` directory check below.
 // ---------------------------------------------------------------------------
 
-/** Which workflows declared a given specifier for a given package. */
-interface SpecifierDeclaration {
-  specifier: string;
-  workflowPathList: string[];
-}
-
 /** Package name → the distinct specifiers declared for it, in first-seen order. */
-type SpecifierIndex = Map<string, SpecifierDeclaration[]>;
+type SpecifierIndex = Map<string, Set<string>>;
 
-function recordSpecifier(
-  index: SpecifierIndex,
-  packageName: string,
-  specifier: string,
-  workflowPath: string,
-): void {
-  const declarationList = index.get(packageName) ?? [];
-  const existing = declarationList.find(
-    (declaration) => declaration.specifier === specifier,
-  );
-
-  if (existing) {
-    if (!existing.workflowPathList.includes(workflowPath)) {
-      existing.workflowPathList.push(workflowPath);
-    }
-  } else {
-    declarationList.push({ specifier, workflowPathList: [workflowPath] });
-  }
-
-  index.set(packageName, declarationList);
-}
-
-/**
- * Builds the error text for one package declared with several specifiers.
- *
- * These files are authored by agents iterating against this command, so the
- * message names every conflicting specifier *and* the workflow that declared
- * it — the fix is always "make these agree", and the author needs to know which
- * files to edit.
- */
-function describeSpecifierConflict(
-  packageName: string,
-  declarationList: readonly SpecifierDeclaration[],
-): string {
-  const detail = declarationList
-    .map(
-      (declaration) =>
-        `  - "${declaration.specifier}" declared by:\n` +
-        declaration.workflowPathList
-          .map((workflowPath) => `      ${workflowPath}`)
-          .join('\n'),
-    )
-    .join('\n');
-
-  return (
-    `Plugin "${packageName}" is declared with ${declarationList.length} different ` +
-    `specifiers in this workspace:\n${detail}\n` +
-    `A workspace resolves each package once: ${RAWBOX_LOCK_FILENAME} is keyed by ` +
-    `package name at the workspace level, and \`workspace setup\` splices every ` +
-    `workflow's \`plugins:\` map into one generated package.json. Two specifiers for ` +
-    `one package cannot both be installed, and which one wins would depend on the ` +
-    `order of \`workflowPathList\`.\n` +
-    `Make every workflow in this workspace declare the same specifier for ` +
-    `"${packageName}".`
-  );
+function recordSpecifier(index: SpecifierIndex, packageName: string, specifier: string): void {
+  const specifierSet = index.get(packageName) ?? new Set<string>();
+  specifierSet.add(specifier);
+  index.set(packageName, specifierSet);
 }
 
 // ---------------------------------------------------------------------------
@@ -180,9 +115,7 @@ async function collectWorkspaceWorkflowNames(
  * 2. every path in `workflowPathList` exists and is a valid workflow document —
  *    a file that is not one is rejected here with the same diagnostic
  *    `workflow verify` gives, rather than being silently skipped;
- * 3. the union of every workflow's `plugins:` map is free of conflicting
- *    specifiers;
- * 4. every `file:` specifier points at a directory that exists.
+ * 3. every `file:` specifier points at a directory that exists.
  *
  * Plugin *installation* is not required to pass: `workspace setup` is what
  * installs, and a workspace must be verifiable before it has been set up.
@@ -386,8 +319,8 @@ export async function verifyWorkspace(workspacePath: string): Promise<void> {
         `Workflow ${pc.green(workflowPath)} is valid: "${pc.cyan(workflow.name)}".`,
       );
 
-      for (const [packageName, specifier] of Object.entries(workflow.plugins)) {
-        recordSpecifier(specifierIndex, packageName, specifier, workflowPath);
+      for (const [packageName, specifier] of Object.entries(workflow.dependencies)) {
+        recordSpecifier(specifierIndex, packageName, specifier);
       }
 
       // A strategy's `backend:` id, against the map declared above. This is the
@@ -514,15 +447,7 @@ export async function verifyWorkspace(workspacePath: string): Promise<void> {
       }
     }
 
-    // -- 3. Conflicting specifiers -----------------------------------------
-    for (const [packageName, declarationList] of specifierIndex) {
-      if (declarationList.length > 1) {
-        p.log.error(pc.red(describeSpecifierConflict(packageName, declarationList)));
-        hasError = true;
-      }
-    }
-
-    // -- 4. Plugins --------------------------------------------------------
+    // -- 3. Plugins --------------------------------------------------------
     // A specifier carries its own source, so there is nothing to probe for a
     // registry range — but a `file:` specifier names a directory, and a
     // missing one is a definite error rather than a "not installed yet".
@@ -531,8 +456,8 @@ export async function verifyWorkspace(workspacePath: string): Promise<void> {
       p.log.step('No plugins are declared by this workspace\'s workflows.');
     }
 
-    for (const [packageName, declarationList] of specifierIndex) {
-      for (const { specifier } of declarationList) {
+    for (const [packageName, specifierSet] of specifierIndex) {
+      for (const specifier of specifierSet) {
         if (!specifier.startsWith(FILE_SPECIFIER_PREFIX)) {
           p.log.step(`Plugin ${pc.green(packageName)} → ${specifier}`);
           continue;

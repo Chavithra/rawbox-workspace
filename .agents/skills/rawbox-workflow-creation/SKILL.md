@@ -22,9 +22,9 @@ This guide details the procedure to define, configure, verify, and run **Workspa
 - **Workspace** (`kind: Workspace`) — the runtime environment a set of workflows executes
   in. It lists its workflows and owns the `rawbox.lock` beside it. Tooling finds a
   workflow's workspace by walking up the directory tree looking for this `kind:`.
-- **Workflow** (`kind: Workflow`) — a declarative state machine: a `plugins:` map, a
+- **Workflow** (`kind: Workflow`) — a declarative state machine: a `dependencies:` map, a
   `storage:` table, and an ordered list of `steps:`.
-- **Step** — one operation call. `plugin:` names a key of `plugins:`; `operation:` is the
+- **Step** — one operation call. `plugin:` names a key of `dependencies:`; `operation:` is the
   contract path inside that plugin. Its `inputs:` read storage, its `outputs:` and
   `errors:` write it.
 - **Storage key (box)** — a persistent item in the LMDB database, addressed by a plain
@@ -69,8 +69,8 @@ Create `workspace.yaml` at the root of your workspace directory.
 ```yaml
 kind: Workspace
 name: data-processing-workspace
-# Optional. Where `workspace setup` installs the declared plugins, and the first
-# place a run resolves them from. Resolved relative to this file; defaults to
+# Optional. Where `workspace setup` installs the dependency envs, and the first
+# place a run resolves plugins from. Resolved relative to this file; defaults to
 # <this directory>/.rawbox, so most workspaces omit it entirely.
 targetFolder: ./target
 workflowPathList:
@@ -90,9 +90,10 @@ seedOverrides:
 do not pass `--workspace`.
 
 `targetFolder:` is the one thing that keeps `workspace setup` and `workflow run` in
-agreement. Whatever it resolves to is the first directory the runner resolves a plugin
-from, ahead of the workspace directory and the process cwd — so a plugin installed only
-into a separate folder is still found, from any cwd. Omit it and the target is
+agreement. A workflow's env under whatever it resolves to is the first directory the runner
+resolves a plugin from, ahead of the target folder itself, the workspace directory and the
+process cwd — so a plugin installed only into a separate folder is still found, from any
+cwd. Omit it and the target is
 `<workspace directory>/.rawbox` — gitignored, machine-owned, and safe to delete — which is
 what the default has always relied on.
 
@@ -100,7 +101,7 @@ what the default has always relied on.
 
 ### Step 2: Declare the Plugins Your Workflow Uses
 
-`plugins:` maps a **package name** to an **npm dependency specifier** — exactly the shape
+`dependencies:` maps a **package name** to an **npm dependency specifier** — exactly the shape
 of `dependencies` in a `package.json`. The specifier carries the source, so there is no
 separate source or path field:
 
@@ -112,6 +113,10 @@ separate source or path field:
 
 A relative `file:` specifier resolves against the **workspace directory** — the one holding
 `workspace.yaml` — not against the workflow file.
+
+Each distinct `dependencies:` map is installed into its own environment,
+`<target folder>/envs/<hash>/`, so workflows in one workspace may declare different
+specifiers for the same package; workflows with identical maps share one env.
 
 ---
 
@@ -128,7 +133,7 @@ formatVersion: "1.0"
 name: count-up
 description: Counts to a limit, recording each pass.
 
-plugins:
+dependencies:
   "@rawbox/rawbox-plugin-default": "^0.1.0"
 
 storage:
@@ -391,8 +396,8 @@ Verify early and often. The errors name the field that is wrong and list the val
 would be right.
 
 ### Verify the workspace
-Checks the structure, every workflow it lists, that no two workflows declare conflicting
-specifiers for the same package, and that every path under `seedOverrides:` is one this
+Checks the structure, every workflow it lists, that every `file:` specifier names an
+existing directory, and that every path under `seedOverrides:` is one this
 workspace lists in `workflowPathList`:
 ```bash
 npx rawbox-cli workspace verify workspace.yaml
@@ -429,8 +434,19 @@ npx rawbox-cli plugin info workflows/count-up.workflow.yaml
 
 ## 5. Locking
 
-`rawbox.lock` records what each declared package resolved to, keyed by package name at the
-**workspace** level, so every workflow in the workspace shares one entry per package.
+`rawbox.lock` records what each declared package resolved to, keyed by package name and then
+by specifier at the **workspace** level (`version: "2"`): workflows declaring the same
+specifier share one entry, and workflows pinning different specifiers of one package get one
+entry each. Locking one workflow keeps its siblings' entries.
+
+```yaml
+version: "2"
+dependencies:
+  "@rawbox/rawbox-plugin-default":
+    "^0.1.0":
+      resolved: "0.1.0"
+      registryHash: "92837f61c312…"
+```
 
 ```bash
 npx rawbox-cli workflow lock workflows/count-up.workflow.yaml
@@ -459,13 +475,14 @@ segment and 8 segments kept, with successors named `<run-id>.1.ndjson`, `.2`, �
 above 0. Nothing is ever renamed or truncated, and every reader below spans the whole
 sequence. `logs.rotate:` in `workspace.yaml` sets both bounds (declare both or neither).
 Before attempting the run,
-every plugin declared under `plugins:` is checked against the resolved target folder, the
-workspace directory, and the process cwd — the same bases the run itself resolves from —
-and if one does not resolve, it is installed first (the equivalent of `workspace setup`
-into the resolved target folder), reported with one info line, and the run proceeds.
+the workflow's own env, `<target folder>/envs/<hash>/`, is checked: if its ready marker is
+missing or a declared plugin does not resolve from it, only that env is installed first (the
+equivalent of `workspace setup` for this one workflow), reported with one info line, and the
+run proceeds. A sibling workflow's broken `dependencies:` never blocks it.
 Starting several workflows of this workspace at once ("Watching a Run") is safe: auto-setup takes an
-exclusive per-target-folder lock, so only one process ever installs and the rest wait, then
-join in without installing again.
+exclusive per-env lock, `<target folder>/envs/<hash>/.rawbox-setup.lock`, so for identical
+`dependencies:` only one process ever installs and the rest wait, then join in without
+installing again; different `dependencies:` install in parallel.
 ```bash
 npx rawbox-cli run workflows/count-up.workflow.yaml
 
@@ -479,11 +496,13 @@ npx rawbox-cli run workflows/count-up.workflow.yaml --no-setup
 npx rawbox-cli run workflows/count-up.workflow.yaml --setup
 ```
 
-### Step 2: Install the declared plugins explicitly (optional)
+### Step 2: Install the dependency envs explicitly (optional)
 Reach for `workspace setup` directly for explicit control over *when* the install happens
 (e.g. as its own CI step, ahead of `workflow lock`) or *how* (a non-default target folder,
-`--install-links`). It splices `plugins:` into a generated `package.json` and runs a single
-`npm install`. The target folder is optional — the argument wins, then `targetFolder:` in
+`--install-links`). It installs every distinct `dependencies:` map into its own `<target folder>/envs/<hash>/`
+(a generated `package.json`, a copy of the workspace's `.npmrc`, one `npm install`; at most
+`--concurrency <n>` at once, default 2), then prunes envs no workflow references unless
+`--no-prune`. `<target folder>/package.json` is never touched. The target folder is optional — the argument wins, then `targetFolder:` in
 `workspace.yaml`, then `<workspace directory>/.rawbox` (gitignored, machine-owned, safe to
 delete) — the same folder `run`'s auto-setup installs into:
 ```bash
@@ -492,9 +511,9 @@ npx rawbox-cli workspace setup workspace.yaml ./target-run-dir # -> an explicit 
 ```
 
 npm treats a `file:` dependency as a **link**: it symlinks the package and does not install
-that package's own dependencies into the target. That is the default because it keeps a
+that package's own dependencies into the env. That is the default because it keeps a
 locally developed plugin live — rebuild it and the next run picks it up, with no second
-setup. Pass `--install-links` when the target folder has to be portable; npm then copies
+setup. Pass `--install-links` when the envs have to be portable; npm then copies
 the package and installs its dependencies, at the cost of the copy being a snapshot.
 
 ### Changing what a key starts with, without editing the workflow

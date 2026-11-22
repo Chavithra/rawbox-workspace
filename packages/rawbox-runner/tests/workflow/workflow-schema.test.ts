@@ -32,7 +32,7 @@ function baseWorkflow(): Record<string, unknown> {
     kind: 'Workflow',
     formatVersion: '1.0',
     name: 'example',
-    plugins: { '@rawbox/rawbox-plugin-default': '^1.0.0' },
+    dependencies: { '@rawbox/rawbox-plugin-default': '^1.0.0' },
     storage: { defaultStrategy: { name: 'lmdb-kv', valueSizeMax: 1900 } },
     steps: [],
   };
@@ -121,11 +121,11 @@ describe('Workflow schema — document identity', () => {
   });
 });
 
-describe('Workflow schema — plugins map', () => {
+describe('Workflow schema — dependencies map', () => {
   it('accepts registry, file: and git+ specifiers', () => {
     const workflow = {
       ...baseWorkflow(),
-      plugins: {
+      dependencies: {
         '@rawbox/rawbox-plugin-default': '^1.0.0',
         '@acme/rawbox-plugin-kraken': 'file:../../packages/rawbox-plugin-kraken',
         '@acme/rawbox-plugin-exp': 'git+https://github.com/acme/exp.git#v1.2.3',
@@ -134,21 +134,21 @@ describe('Workflow schema — plugins map', () => {
     expect(workflowValidator.Check(workflow)).toBe(true);
   });
 
-  it('rejects a `plugins` array — it is a package -> specifier map', () => {
-    const workflow = { ...baseWorkflow(), plugins: ['@rawbox/rawbox-plugin-default'] };
+  it('rejects a `dependencies` array — it is a package -> specifier map', () => {
+    const workflow = { ...baseWorkflow(), dependencies: ['@rawbox/rawbox-plugin-default'] };
     expect(workflowValidator.Check(workflow)).toBe(false);
   });
 
   it('rejects a structured plugin entry — the specifier carries the source', () => {
     const workflow = {
       ...baseWorkflow(),
-      plugins: { '@rawbox/rawbox-plugin-default': { source: 'npm', version: '^1.0.0' } },
+      dependencies: { '@rawbox/rawbox-plugin-default': { source: 'npm', version: '^1.0.0' } },
     };
     expect(workflowValidator.Check(workflow)).toBe(false);
   });
 
   it('rejects an empty specifier', () => {
-    const workflow = { ...baseWorkflow(), plugins: { '@rawbox/rawbox-plugin-default': '' } };
+    const workflow = { ...baseWorkflow(), dependencies: { '@rawbox/rawbox-plugin-default': '' } };
     expect(workflowValidator.Check(workflow)).toBe(false);
   });
 });
@@ -467,25 +467,36 @@ describe('Step schema — timeoutMs', () => {
 describe('RawboxLock schema', () => {
   it('accepts the shape rawbox.lock documents', () => {
     const lock = {
-      version: '1',
-      plugins: {
-        '@rawbox/rawbox-plugin-default': { resolved: '1.0.0', registryHash: '92837f61c312' },
+      version: '2',
+      dependencies: {
+        '@rawbox/rawbox-plugin-default': {
+          '^1.0.0': { resolved: '1.0.0', registryHash: '92837f61c312' },
+          '^2.0.0': { resolved: '2.1.0', registryHash: '0a1b2c3d4e5f' },
+        },
       },
     };
     expect(lockValidator.Check(lock)).toBe(true);
   });
 
-  it('accepts an empty plugins map', () => {
-    expect(lockValidator.Check({ version: '1', plugins: {} })).toBe(true);
+  it('accepts an empty dependencies map', () => {
+    expect(lockValidator.Check({ version: '2', dependencies: {} })).toBe(true);
   });
 
   it('requires both resolved and registryHash on an entry', () => {
-    const lock = { version: '1', plugins: { a: { resolved: '1.0.0' } } };
+    const lock = { version: '2', dependencies: { a: { '^1.0.0': { resolved: '1.0.0' } } } };
+    expect(lockValidator.Check(lock)).toBe(false);
+  });
+
+  it('rejects an entry keyed by package name alone', () => {
+    const lock = {
+      version: '2',
+      dependencies: { a: { resolved: '1.0.0', registryHash: 'abc' } },
+    };
     expect(lockValidator.Check(lock)).toBe(false);
   });
 
   it('rejects an unknown lock version', () => {
-    const lock = { version: '2', plugins: {} };
+    const lock = { version: '1', dependencies: {} };
     expect(lockValidator.Check(lock)).toBe(false);
   });
 });

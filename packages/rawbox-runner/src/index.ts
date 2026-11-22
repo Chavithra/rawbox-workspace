@@ -5,6 +5,9 @@ export * from './workflow/workflow-types.js';
 // entries to `@rawbox/store`'s budget. Every per-key rule is expressed against
 // the table and against nothing else.
 export * from './workflow/key-table.js';
+// One env per distinct `dependencies:` map, `<targetFolder>/envs/<hash16>/`:
+// specifier normalization, the portable lock key, the env hash and grouping.
+export * from './workflow/dependency-env.js';
 export * from './workflow/lock-types.js';
 export * from './workflow/lock.js';
 export * from './workflow/resolver.js';

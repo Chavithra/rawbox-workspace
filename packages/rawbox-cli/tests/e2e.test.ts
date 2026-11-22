@@ -171,18 +171,20 @@ describe('e2e — scaffold', () => {
     expect(parsed.formatVersion).toBe('1.0');
     expect(parsed.name).toBe(WORKFLOW_NAME);
     for (const step of parsed.steps) {
-      expect(Object.keys(parsed.plugins)).toContain(step.plugin);
+      expect(Object.keys(parsed.dependencies)).toContain(step.plugin);
     }
   });
 });
 
 describe('e2e — setup', () => {
-  it('installs the declared plugin into the target folder', async () => {
+  it("installs the declared plugin into the workflow's env under the target folder", async () => {
     const result = await setupWorkspace(workspaceFile, targetDir);
     expect(result.isOk(), result.isErr() ? result.error : '').toBe(true);
+    const [env] = result._unsafeUnwrap().envs;
+    expect(path.dirname(env!.envDir)).toBe(path.join(targetDir, 'envs'));
 
     const generatedPackageJson = JSON.parse(
-      await fs.readFile(path.join(targetDir, 'package.json'), 'utf-8'),
+      await fs.readFile(path.join(env!.envDir, 'package.json'), 'utf-8'),
     );
 
     // npm resolves a relative `file:` specifier against the generated
@@ -194,7 +196,7 @@ describe('e2e — setup', () => {
     );
 
     // And npm actually installed it, rather than setup merely writing a manifest.
-    const installed = path.join(targetDir, 'node_modules', PLUGIN_PACKAGE);
+    const installed = path.join(env!.envDir, 'node_modules', PLUGIN_PACKAGE);
     expect(await fs.stat(installed)).toBeDefined();
   }, 300_000);
 });
@@ -205,9 +207,14 @@ describe('e2e — lock', () => {
     expectPassed();
 
     const lock = YAML.parse(await fs.readFile(lockFile, 'utf-8'));
-    expect(lock.version).toBe('1');
+    expect(lock.version).toBe('2');
 
-    const entry = lock.plugins[PLUGIN_PACKAGE];
+    const entryList = Object.values(lock.dependencies[PLUGIN_PACKAGE] ?? {}) as Array<{
+      resolved: string;
+      registryHash: string;
+    }>;
+    expect(entryList).toHaveLength(1);
+    const entry = entryList[0]!;
     expect(entry, 'no lock entry for the declared plugin').toBeDefined();
     expect(entry.resolved).toMatch(/^\d+\.\d+\.\d+/);
     expect(entry.registryHash).toMatch(/^[0-9a-f]{64}$/);
@@ -407,7 +414,11 @@ describe('e2e — lock integrity on the run path', () => {
   it('refuses to run when rawbox.lock disagrees with what is installed', async () => {
     const original = await fs.readFile(lockFile, 'utf-8');
     const lock = YAML.parse(original);
-    lock.plugins[PLUGIN_PACKAGE].registryHash = 'f'.repeat(64);
+    for (const entry of Object.values(lock.dependencies[PLUGIN_PACKAGE]) as Array<{
+      registryHash: string;
+    }>) {
+      entry.registryHash = 'f'.repeat(64);
+    }
     await fs.writeFile(lockFile, YAML.stringify(lock), 'utf-8');
 
     try {

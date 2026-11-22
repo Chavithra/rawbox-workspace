@@ -3,7 +3,7 @@ formatVersion: "1.0"
 name: example
 description: "A clean, self-documenting workflow example"
 
-plugins:
+dependencies:
   "@rawbox/rawbox-plugin-default": "^1.0.0"
   "@acme/rawbox-plugin-kraken": "file:../../packages/rawbox-plugin-kraken"
 

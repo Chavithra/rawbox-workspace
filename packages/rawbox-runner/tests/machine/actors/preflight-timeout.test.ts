@@ -174,7 +174,7 @@ function twoStepWorkflow(workflowName: string, plugin: string): string {
     'formatVersion: "1.0"',
     `name: ${workflowName}`,
     '',
-    'plugins:',
+    'dependencies:',
     `  "${plugin}": "*"`,
     '',
     'storage:',

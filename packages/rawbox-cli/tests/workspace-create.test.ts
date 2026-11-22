@@ -119,7 +119,7 @@ describe('workspace create — emits annotated YAML', () => {
     );
   });
 
-  it('writes a workflow: kind, formatVersion, plugins, storage, steps', async () => {
+  it('writes a workflow: kind, formatVersion, dependencies, storage, steps', async () => {
     const parsed = YAML.parse(await fs.readFile(workflowPath, 'utf-8'));
 
     expect(parsed.kind).toBe('Workflow');
@@ -133,8 +133,8 @@ describe('workspace create — emits annotated YAML', () => {
     expect(parsed.pluginPathList).toBeUndefined();
     expect(parsed.seedData).toBeUndefined();
 
-    expect(parsed.plugins).toBeDefined();
-    expect(Object.keys(parsed.plugins)).toContain(
+    expect(parsed.dependencies).toBeDefined();
+    expect(Object.keys(parsed.dependencies)).toContain(
       '@rawbox/rawbox-plugin-default',
     );
     expect(parsed.storage.defaultStrategy).toEqual({
@@ -146,10 +146,10 @@ describe('workspace create — emits annotated YAML', () => {
 
   it('declares every plugin: its steps name', async () => {
     const parsed = YAML.parse(await fs.readFile(workflowPath, 'utf-8'));
-    const declaredList = Object.keys(parsed.plugins);
+    const declaredList = Object.keys(parsed.dependencies);
 
     // The schema cannot catch this — `plugin:` is just a string — so a
-    // generator that drifts from its own `plugins:` map produces a document
+    // generator that drifts from its own `dependencies:` map produces a document
     // that parses and never resolves.
     for (const step of parsed.steps) {
       expect(declaredList).toContain(step.plugin);
@@ -305,12 +305,12 @@ describe('project create — emits annotated YAML', () => {
       'utf-8',
     );
     expect(registrySource).toContain(`'./${step.operation}.definition.js'`);
-    expect(Object.keys(parsed.plugins)).toContain(step.plugin);
+    expect(Object.keys(parsed.dependencies)).toContain(step.plugin);
   });
 
   it('resolves its `file:` specifier against the workspace directory', async () => {
     const parsed = YAML.parse(await fs.readFile(exampleWorkflowPath, 'utf-8'));
-    const specifier = parsed.plugins['rawbox-plugin-example'];
+    const specifier = parsed.dependencies['rawbox-plugin-example'];
 
     // Two levels up from `workspaces/workspace-example`, not three: a relative
     // `file:` specifier is resolved against the workspace directory, not

@@ -267,7 +267,7 @@ export class PluginDiscoverer {
    * Loads a known list of plugin packages into the cache and returns the
    * package → registry-hash mapping alongside it.
    *
-   * The packages are named by the workflow's `plugins:` map, so
+   * The packages are named by the workflow's `dependencies:` map, so
    * a caller usually knows them without scanning a `package.json`; that is what
    * this entry point exists for, and {@link discoverAndLoadPlugins} layers
    * discovery on top of it.
@@ -326,7 +326,7 @@ export class PluginDiscoverer {
    * duplicate `loadPlugins`' loading/caching behaviour — it answers "would
    * this resolve", nothing more.
    *
-   * @param pluginNameList - Package names to check (a workflow's `plugins:` keys).
+   * @param pluginNameList - Package names to check (a workflow's `dependencies:` keys).
    * @param options - Optional resolution base, see {@link PluginLoadOptions}.
    * @returns Names, in request order, of the plugins that would NOT resolve.
    *   Empty means every plugin resolves.

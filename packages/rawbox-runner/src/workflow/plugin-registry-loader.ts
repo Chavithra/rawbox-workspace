@@ -241,7 +241,7 @@ function resolveRegistryPath(
  * workspace package of `@rawbox/runner` itself, the case
  * `bareSpecifierFallback` exists for) is correctly reported as resolvable.
  *
- * @param packageName - The package name to check (a workflow's `plugins:` key).
+ * @param packageName - The package name to check (a workflow's `dependencies:` key).
  * @param options - Same resolution knobs as {@link loadPluginContractRegistry}.
  * @returns Whether the plugin's contract registry would resolve.
  */

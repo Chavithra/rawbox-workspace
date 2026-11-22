@@ -6,6 +6,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yargs from 'yargs';
 
+import { setupDependencyEnv } from '@rawbox/runner';
+
 import { runCommandDefinition } from '../src/commands/workflow/run.js';
 
 // ---------------------------------------------------------------------------
@@ -72,7 +74,7 @@ function workflowYaml(name: string, sleepMs: number): string {
 kind: Workflow
 formatVersion: "1.0"
 name: ${name}
-plugins:
+dependencies:
   "${PLUGIN_PACKAGE}": "file:${PLUGIN_DIR}"
 storage:
   defaultStrategy:
@@ -121,6 +123,16 @@ async function makeScenario(
     workflowYaml(name, options.sleepMs ?? QUICK_SLEEP_MS),
     'utf-8',
   );
+
+  // Installed up front, so the spawned run never auto-sets-up: an install
+  // would print to stdout ahead of the NDJSON stream and push the step past
+  // the mid-run sample.
+  const setupResult = await setupDependencyEnv(
+    path.join(directory, '.rawbox'),
+    { [PLUGIN_PACKAGE]: `file:${PLUGIN_DIR}` },
+    directory,
+  );
+  expect(setupResult.isOk(), setupResult.isErr() ? setupResult.error : '').toBe(true);
 
   return {
     directory,

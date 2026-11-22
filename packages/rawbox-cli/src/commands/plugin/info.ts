@@ -8,9 +8,11 @@ import {
   DOCUMENT_KIND,
   RAWBOX_LOCK_FILENAME,
   discoverWorkspace,
+  lookupRawboxLockEntry,
   parseConfig,
   rawboxLockPath,
   readRawboxLock,
+  resolveDependencyEnvDir,
   resolvePluginLockEntries,
   validateWorkflowType,
   verifyRawboxLock,
@@ -33,7 +35,7 @@ import { getErrorMessage } from '../../utils/error.js';
 //
 // This command exists so an agent authoring a workflow can find out *why* a
 // plugin will not resolve, without running the workflow. It answers, for every
-// package the document declares in `plugins:`:
+// package the document declares in `dependencies:`:
 //
 //   - what the workflow asked for (the specifier) and what npm actually gave
 //     it (the resolved version);
@@ -76,15 +78,15 @@ type PackageResolution =
  * loader, and keeps the shared loader's diagnostics verbatim.
  */
 async function resolveDeclaredPackages(
-  packageNameList: readonly string[],
+  dependencies: Readonly<Record<string, string>>,
   resolveFromDirectory: string,
   registryCache: ContractRegistryCache,
 ): Promise<PackageResolution[]> {
   const resolutionList: PackageResolution[] = [];
 
-  for (const name of packageNameList) {
+  for (const [name, specifier] of Object.entries(dependencies)) {
     const result = await resolvePluginLockEntries(
-      [name],
+      { [name]: specifier },
       resolveFromDirectory,
       registryCache,
     );
@@ -175,7 +177,7 @@ function describeOperations(
 ): string {
   if (!usage || usage.stepCount === 0) {
     return pc.yellow(
-      'no steps reference this plugin — declared in plugins: but unused',
+      'no steps reference this plugin — declared in dependencies: but unused',
     );
   }
 
@@ -231,6 +233,7 @@ interface LockAgreement {
 
 function describeLockAgreement(
   name: string,
+  specifier: string,
   installedHash: string | undefined,
   lock: RawboxLock | undefined,
   lockLocated: boolean,
@@ -246,7 +249,7 @@ function describeLockAgreement(
     };
   }
 
-  const entry = lock.plugins[name];
+  const entry = lookupRawboxLockEntry(lock, name, specifier);
   if (!entry) {
     // A present lock missing one entry leaves a partially locked workspace
     // usable; that package is simply unlocked.
@@ -266,7 +269,7 @@ function describeLockAgreement(
   }
 
   // Delegated so the mismatch wording is the one every other command emits.
-  const verification = verifyRawboxLock(lock, { [name]: installedHash }, [name]);
+  const verification = verifyRawboxLock(lock, { [name]: installedHash }, { [name]: specifier });
 
   if (verification.isErr()) {
     return {
@@ -400,9 +403,16 @@ export async function pluginInfo(
     // Where `rawbox.lock` lives and where the *packages* live are two different
     // questions once a workspace can declare a `targetFolder:`. The lock stays
     // beside `workspace.yaml`; resolution follows setup.
-    const resolutionDirectory = workspaceFile
-      ? await resolveWorkspaceTargetFolderOrWarn(workspaceFile)
-      : resolveFromDirectory;
+    // Within the target folder, packages live in the env of this workflow's
+    // *whole* `dependencies:` map, which is why it is computed once here
+    // rather than per package.
+    let resolutionDirectory = resolveFromDirectory;
+    let envDir: string | undefined;
+    if (workspaceFile) {
+      const targetFolder = await resolveWorkspaceTargetFolderOrWarn(workspaceFile);
+      envDir = resolveDependencyEnvDir(targetFolder, workflow.dependencies, resolveFromDirectory);
+      resolutionDirectory = envDir ?? targetFolder;
+    }
 
     // -- 3. Read the lock --------------------------------------------------
     // Before resolution, so a corrupt lock fails fast rather than after a
@@ -421,13 +431,13 @@ export async function pluginInfo(
     }
 
     // -- 4. Resolve every declared package ---------------------------------
-    const declaredPackageList = Object.keys(workflow.plugins);
+    const declaredPackageList = Object.keys(workflow.dependencies);
     const usageByPlugin = collectOperationUsage(workflow);
 
     if (declaredPackageList.length === 0) {
       p.log.warn(
         `Workflow "${workflow.name}" declares no plugins. Every step's plugin: must name ` +
-          `a package listed under plugins: (there is no implicit default).`,
+          `a package listed under dependencies: (there is no implicit default).`,
       );
     }
 
@@ -441,7 +451,7 @@ export async function pluginInfo(
       `Resolving ${declaredPackageList.length} plugin(s) from ${pc.green(resolutionDirectory)}...`,
     );
     const resolutionList = await resolveDeclaredPackages(
-      declaredPackageList,
+      workflow.dependencies,
       resolutionDirectory,
       registryCache,
     );
@@ -449,7 +459,8 @@ export async function pluginInfo(
 
     // -- 5. Render the report ----------------------------------------------
     p.log.message(
-      `📦 Required Plugins for workflow "${pc.cyan(workflow.name)}":\n${RULE}`,
+      `📦 Required Plugins for workflow "${pc.cyan(workflow.name)}":\n${RULE}` +
+        (envDir !== undefined ? `\n${field('Env', pc.green(envDir))}` : ''),
     );
 
     const unavailableList: string[] = [];
@@ -459,8 +470,8 @@ export async function pluginInfo(
 
     for (const resolution of resolutionList) {
       const { name } = resolution;
-      // Guarded: `name` comes from `Object.keys(workflow.plugins)`.
-      const specifier = workflow.plugins[name] as string;
+      // Guarded: `name` comes from `Object.keys(workflow.dependencies)`.
+      const specifier = workflow.dependencies[name] as string;
       const usage = usageByPlugin.get(name);
 
       const installedHash =
@@ -477,7 +488,7 @@ export async function pluginInfo(
         ? new Set(Object.keys(registry.contractRecord))
         : undefined;
 
-      const agreement = describeLockAgreement(name, installedHash, lock, lockLocated);
+      const agreement = describeLockAgreement(name, specifier, installedHash, lock, lockLocated);
 
       const lineList: string[] = [field('Package', pc.cyan(name))];
 
@@ -561,11 +572,11 @@ export async function pluginInfo(
 
     // -- 6. Steps naming a package the document never declared -------------
     // The schema cannot catch this: `plugin:` is just a string, and the tie to
-    // `plugins:` is semantic. `resolveWorkflow` rejects it later, but this
+    // `dependencies:` is semantic. `resolveWorkflow` rejects it later, but this
     // command is where an author looks first, so it says so here — and lists
     // what *was* declared, which is the actionable half.
     const undeclaredList = [...usageByPlugin.keys()].filter(
-      (name) => !Object.prototype.hasOwnProperty.call(workflow.plugins, name),
+      (name) => !Object.prototype.hasOwnProperty.call(workflow.dependencies, name),
     );
 
     for (const name of undeclaredList) {
@@ -579,7 +590,7 @@ export async function pluginInfo(
                 ? declaredPackageList.map((entry) => `"${entry}"`).join(', ')
                 : '(none)'
             }\n` +
-            `  Add it under plugins: with an npm specifier, e.g. ${name}: "^1.0.0".`,
+            `  Add it under dependencies: with an npm specifier, e.g. ${name}: "^1.0.0".`,
         ),
       );
     }

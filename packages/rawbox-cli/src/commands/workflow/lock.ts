@@ -8,6 +8,7 @@ import {
   discoverWorkspace,
   lockWorkspacePlugins,
   parseConfig,
+  resolveDependencyEnvDir,
   validateWorkflowType,
   RAWBOX_LOCK_FILENAME,
   type Workflow,
@@ -22,7 +23,7 @@ export interface WorkflowLockOptions {
 }
 
 /**
- * Resolves every package declared in the workflow's `plugins:` map, computes
+ * Resolves every package declared in the workflow's `dependencies:` map, computes
  * each contract-registry hash, and writes `workspaces/<workspace>/rawbox.lock`.
  *
  * **The workflow file is never modified.** That is the entire reason the lock
@@ -99,7 +100,7 @@ export async function lockWorkflow(
     }
 
     const workspaceDir = path.dirname(workspaceFile);
-    const packageNames = Object.keys(workflow.plugins);
+    const packageNames = Object.keys(workflow.dependencies);
 
     if (packageNames.length === 0) {
       p.log.warn(
@@ -108,19 +109,21 @@ export async function lockWorkflow(
       return;
     }
 
-    // Resolution happens where `workspace setup` installed, which is the
-    // workspace's target folder — the workspace directory itself unless the
-    // document says otherwise. The lock is still written beside
-    // `workspace.yaml`: the two are different questions.
-    const resolveFromDir = await resolveWorkspaceTargetFolderOrWarn(workspaceFile);
+    // Resolution happens in this workflow's env under the workspace's target
+    // folder, where `workspace setup` installed it. The lock is still written
+    // beside `workspace.yaml`: the two are different questions.
+    const targetFolder = await resolveWorkspaceTargetFolderOrWarn(workspaceFile);
+    const envDir = resolveDependencyEnvDir(targetFolder, workflow.dependencies, workspaceDir);
 
     const s = p.spinner();
-    s.start(`Resolving ${packageNames.length} plugin(s) from ${pc.green(resolveFromDir)}...`);
+    s.start(
+      `Resolving ${packageNames.length} plugin(s) from ${pc.green(envDir ?? targetFolder)}...`,
+    );
 
     const result = await lockWorkspacePlugins({
       workspaceDir,
-      packageNames,
-      resolveFromDir,
+      dependencies: workflow.dependencies,
+      targetFolder,
     });
 
     if (result.isErr()) {
@@ -130,7 +133,7 @@ export async function lockWorkflow(
     }
 
     const { entries, lockPath, changed } = result.value;
-    s.stop(`Resolved ${entries.length} plugin(s).`);
+    s.stop(`Resolved ${entries.length} plugin(s) from ${pc.green(result.value.envDir ?? targetFolder)}.`);
 
     for (const entry of entries) {
       const mark = changed.includes(entry.name) ? pc.yellow('updated') : pc.dim('unchanged');

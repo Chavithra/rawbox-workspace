@@ -13,7 +13,7 @@ import { Type, type TObject, type TProperties } from 'typebox';
  *
  * Two things it deliberately does **not** reach, both open by design:
  *
- * - **`Type.Record` maps.** `storage.keys`, `plugins:`, `backends:`
+ * - **`Type.Record` maps.** `storage.keys`, `dependencies:`, `backends:`
  *   and the box-location records are key → value maps whose *keys* are the
  *   author's. A `storage.keys` entry's `seed` in particular holds arbitrary
  *   data, which is the whole reason a seed has no long form: a binding value is

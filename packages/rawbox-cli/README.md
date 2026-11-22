@@ -23,7 +23,7 @@ actions for a resource.
 | `operation create` | Add an operation to an existing plugin. |
 | `workspace create` | Scaffold a workspace with a runnable example workflow. |
 | `workspace verify <file>` | Validate a workspace document. |
-| `workspace setup <workspace-path> [target-folder]` | Install the declared plugins. |
+| `workspace setup <workspace-path> [target-folder]` | Install each distinct `dependencies:` map into its own env. |
 | `workflow verify <file>` | Deep-verify a workflow against its plugin registries. |
 | `workflow lock <file>` | Write/refresh the workspace `rawbox.lock`. |
 | `run <workflow>` | Execute a workflow, auto-installing missing plugins first (alias for `workflow run`). |
@@ -76,12 +76,13 @@ rawbox-cli operation create --name sum-numbers
 #### D. Create a Workspace (`workspace create`)
 Scaffolds a declarative workspace — `workspace.yaml`, a runnable example workflow, a
 `logs/` directory, and a `.gitignore` covering `.rawbox/` (the gitignored, machine-owned
-folder `workspace setup` installs plugins into and a run writes its LMDB data under —
+folder `workspace setup` installs dependency envs into and a run writes its LMDB data under —
 §1.3.A). The workspace lands in `workspaces/<name>` when the current directory's
 `package.json` declares npm `workspaces`, and in `<name>` otherwise; the example workflow
 always gets a published registry range as its plugin specifier, never a `file:` one — even
-when scaffolded inside this monorepo, where a run's auto-setup still resolves it with no
-install by walking up to the hoisted sibling package (CONTRIBUTING.md).
+when scaffolded inside this monorepo, where the first run's auto-setup therefore asks the npm
+registry for it; a workflow inside the monorepo uses a `file:` specifier pointing at the
+local package instead (CONTRIBUTING.md).
 ```bash
 rawbox-cli workspace create --name live-trading --workflows ./workflows/example.workflow.yaml
 ```
@@ -169,7 +170,8 @@ rawbox-cli workflow verify workspaces/live-trading/workflows/example.workflow.ya
 #### C. Plugin Report (`plugin info`)
 Reports each package a workflow declares: its specifier, resolved version, install status,
 contract-registry hash with `rawbox.lock` agreement, and the operations the workflow
-references from it. This is the first command to reach for when a plugin will not resolve.
+references from it, and prints the env directory (`<target folder>/envs/<hash>/`) it
+resolved from. This is the first command to reach for when a plugin will not resolve.
 ```bash
 rawbox-cli plugin info workspaces/live-trading/workflows/example.workflow.yaml
 ```
@@ -186,11 +188,26 @@ rawbox-cli registry hash ./packages/rawbox-plugin-example/dist/contract-registry
 ### 1.3. Runtime Commands
 
 #### A. Workspace Initialization (`workspace setup`)
-Splices every workflow's `plugins:` map into a generated `package.json` and runs one
-`npm install`.
+Groups the workspace's workflows by `dependencies:` map and installs each distinct map into
+its own env, `<target folder>/envs/<hash>/`: a generated `package.json` holding exactly that
+map, a copy of the workspace's `.npmrc`, and one `npm install`. Workflows with identical maps
+share one env; workflows declaring different specifiers for the same package get separate
+envs, so neither versions nor peers collide. `<target folder>/package.json` is never touched.
+It prints one line per env (`envs/<hash>  <workflow paths>`) and every env it pruned.
 
-`run` / `workflow run` already do this automatically when a declared plugin does not
-resolve (§1.3.C, "Auto-setup"), so this command is no longer a required step before a
+Each env is installed under that env's `.rawbox-setup.lock`, the same lock a run's
+auto-setup takes, so `workspace setup` and concurrent runs never install into one env at the
+same time. An install failure names the env hash and the workflows using it; every env is
+still attempted, so one pass reports every broken declaration.
+
+| Flag | Effect |
+| --- | --- |
+| `--concurrency <n>` | How many env installs run at once (positive integer, default `2`). |
+| `--no-prune` | Keep envs no workflow references. By default, once every install succeeded, such `envs/<hash>/` directories are deleted, skipping any holding a `.rawbox-setup.lock`. |
+| `--install-links` | Copy `file:` plugins instead of linking them — see below. |
+
+`run` / `workflow run` already do this automatically for the one env a workflow needs
+(§1.3.C, "Auto-setup"), so this command is no longer a required step before a
 first run. Reach for it directly when you want explicit control over *when* the install
 happens (e.g. as a separate CI step, ahead of `workflow lock`) or *how* (`--install-links`,
 a non-default `target-folder`) — `run --setup` covers the common "reinstall now" case
@@ -204,10 +221,9 @@ without a second command.
 | 2 | `targetFolder:` in `workspace.yaml`, resolved relative to that file |
 | 3 | `<workspace directory>/.rawbox` (default) |
 
-Whatever it resolves to is the *first* place `workflow run` looks for a plugin, ahead of
-the workspace directory and the process cwd. That is what makes setup and run agree: a
-plugin installed only into a separate target folder used to be unresolvable from any cwd
-but that folder.
+A workflow's env under it is the *first* place `workflow run` looks for a plugin, ahead of
+the target folder itself, the workspace directory and the process cwd. That is what makes
+setup and run agree.
 
 `.rawbox/` is gitignored and machine-owned — `workspace create` writes the `.gitignore`
 entry for it — so the default install never lands `package.json`/`node_modules` beside the
@@ -215,21 +231,24 @@ authored `workspace.yaml`. `rawbox.lock` is the one exception: it stays next to
 `workspace.yaml` because it is committed.
 
 ```bash
-# Default: install into <workspace directory>/.rawbox, where a run already resolves plugins from
+# Default: install into <workspace directory>/.rawbox/envs/<hash>/, where a run resolves plugins from
 rawbox-cli workspace setup workspaces/live-trading/workspace.yaml
 
 # Or name a separate folder
 rawbox-cli workspace setup workspaces/live-trading/workspace.yaml ./target-run-dir
+
+# Four installs at once, keeping envs no workflow references any more
+rawbox-cli workspace setup workspaces/live-trading/workspace.yaml --concurrency 4 --no-prune
 
 # Portable, not live — see below
 rawbox-cli workspace setup workspaces/live-trading/workspace.yaml ./target-run-dir --install-links
 ```
 
 npm treats a `file:` dependency as a **link**: it symlinks the package and does not install
-that package's own dependencies into the target. That is the default here on purpose —
+that package's own dependencies into the env. That is the default here on purpose —
 rebuild a locally developed plugin and the next run picks it up, with no second setup. Pass
 `--install-links` to make npm copy the package and install its dependencies instead,
-producing a target folder you can move to a machine that never installed the plugin. The
+producing envs you can move to a machine that never installed the plugin. The
 trade is that the copy is a snapshot: re-run setup after every plugin change.
 
 > [!WARNING]
@@ -247,9 +266,11 @@ trade is that the copy is a snapshot: re-run setup after every plugin change.
 > read. Publishing `@rawbox/plugin` is what would actually change this.
 
 #### B. Lock Plugin Resolution (`workflow lock`)
-Resolves every plugin the workflow declares and writes `rawbox.lock` next to
-`workspace.yaml`. The workflow file is never modified. Re-run it after any contract change,
-which alters a plugin's registry hash.
+Resolves every plugin the workflow declares from the workflow's own env and writes
+`rawbox.lock` (version `2`) next to `workspace.yaml`, keyed by package name, then by
+specifier: workflows pinning different specifiers of one package get one entry each, and
+locking one workflow keeps its siblings' entries. The workflow file is never modified.
+Re-run it after any contract change, which alters a plugin's registry hash.
 ```bash
 rawbox-cli workflow lock workspaces/live-trading/workflows/example.workflow.yaml
 ```
@@ -278,30 +299,34 @@ carrying the segment numbers and the bounds in force; the ones that *deleted* hi
 `severity: "warn"` and print one line in the terminal. Both bounds come from the workspace
 document's `logs.rotate:` block (FORMAT.md, "`logs.rotate`").
 
-**Auto-setup.** Before attempting the run, every plugin the workflow declares under
-`plugins:` is checked against the same resolution bases the run itself will use (the
-resolved target folder, the workspace directory, the process cwd). If any do not resolve,
-`run` installs them first — the equivalent of `workspace setup` into the resolved target
-folder — reports where it installed, and then proceeds. A workspace that has never had
+**Auto-setup.** Before attempting the run, `run` checks the workflow's own env,
+`<target folder>/envs/<hash>/` (the hash of its `dependencies:` map). The env needs setup
+when its `.rawbox-env-ready.json` marker is missing — written only after an install
+succeeded — or when a declared plugin does not resolve from it. Name resolution alone is not
+enough: after a specifier changes, the package name may still resolve from an older install
+or a hoisted copy, and the run would silently use the wrong version. When setup is needed,
+`run` installs only this workflow's `dependencies:` into that env, reports where, and then
+proceeds — a sibling workflow's broken declaration never blocks it. A workflow with an empty
+`dependencies:` map has no env and skips this step. A workspace that has never had
 `workspace setup` run against it still executes successfully on the first try. Two flags
 control this:
 
 | Flag | Effect |
 | --- | --- |
-| *(default)* | Auto-installs only when one or more declared plugins do not already resolve. |
+| *(default)* | Auto-installs only when the workflow's env is not ready. |
 | `--no-setup` | Never auto-installs; a missing plugin fails the run exactly as it always has. |
-| `--setup` | Forces a reinstall unconditionally, even when everything already resolves. |
+| `--setup` | Forces a reinstall unconditionally, even when the env is already ready. |
 
-**Concurrent runs of one workspace never race the install.** Starting several
-workflows of the same workspace at once — the normal way to run a
-multi-workflow system — used to mean every process independently found the
-same plugin missing and called `npm install` into the same target folder at
-the same time, which npm does not tolerate. Auto-setup now takes an exclusive
-lock, `<target folder>/.rawbox-setup.lock`, before checking or installing
-anything: exactly one process ever runs the install, and every other one
-waits for it to finish, re-checks resolution, and proceeds without installing
-a second time unless it still needs a plugin the winner did not install (e.g.
-two workflows declaring different plugin sets). A lock left behind by a
+**Concurrent runs never race the install.** Starting several workflows of the
+same workspace at once — the normal way to run a multi-workflow system — would
+otherwise mean every process sharing one `dependencies:` map found the same env
+missing and called `npm install` into it at the same time, which npm does not
+tolerate. Auto-setup takes an exclusive per-env lock,
+`<target folder>/envs/<hash>/.rawbox-setup.lock`, before installing: exactly
+one process runs the install, and every other one waits for it to finish,
+re-checks the env, and proceeds without installing a second time. Workflows
+with different `dependencies:` maps lock different envs and install in
+parallel. `workspace setup` takes the same lock per env. A lock left behind by a
 process that died mid-install is detected as stale (its pid, or that pid's
 start time, no longer matches a live process — the same check `runs list`
 uses for crash detection) and taken over automatically. `--no-setup` never
@@ -952,8 +977,8 @@ rawbox-cli workflow lock workspaces/live-trading/workflows/example.workflow.yaml
 rawbox-cli workflow run workspaces/live-trading/workflows/example.workflow.yaml
 ```
 
-`workspace setup` is not in this list: `workflow run` installs any plugin that does not
-already resolve before running (§1.3.A/C). Add it back explicitly when you want the
+`workspace setup` is not in this list: `workflow run` installs the workflow's env when it is
+not ready before running (§1.3.A/C). Add it back explicitly when you want the
 install to happen as its own step — e.g. before `workflow lock`, or in CI ahead of time.
 
 ---

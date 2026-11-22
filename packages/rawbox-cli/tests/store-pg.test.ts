@@ -180,7 +180,7 @@ describe('CLI store & status commands against PostgreSQL backends', () => {
         'kind: Workflow',
         'formatVersion: "1.0"',
         'name: pg_wf',
-        'plugins: {}',
+        'dependencies: {}',
         'storage:',
         '  defaultStrategy:',
         '    name: pg-kv',

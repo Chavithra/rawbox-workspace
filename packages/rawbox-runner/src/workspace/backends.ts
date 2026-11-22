@@ -20,7 +20,7 @@ import { StrictObject } from '@rawbox/store';
 // environment's connection details are therefore the workspace's to state, once,
 // and a strategy names an **id** into that map. `backend: main` is a reference,
 // exactly as `plugin: "@rawbox/rawbox-plugin-default"` is a reference into
-// `plugins:` rather than a path.
+// `dependencies:` rather than a path.
 //
 // ## The consequence, stated rather than discovered
 //
@@ -84,7 +84,7 @@ export type BackendConnection = Static<typeof BackendConnection>;
  * `backends:` — backend id → connection descriptor.
  *
  * A `Type.Record`, not a `StrictObject`: the *keys* are the author's own ids,
- * exactly as `plugins:` and `storage.keys` are (see `StrictObject`'s note
+ * exactly as `dependencies:` and `storage.keys` are (see `StrictObject`'s note
  * on why it deliberately does not reach records). The **values** are closed.
  */
 export const BackendMap = Type.Record(Type.String(), BackendConnection);

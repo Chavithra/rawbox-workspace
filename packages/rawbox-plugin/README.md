@@ -185,7 +185,7 @@ With this architecture, the Runner can trust that any `Definition` it receives m
 
 A Rawbox plugin is a modular, content-addressable package exposing **Operation** or
 **Control-Flow** definitions. A workflow can reach any package it declares under
-`plugins:`, but to be **auto-discovered** a package must satisfy all three of:
+`dependencies:`, but to be **auto-discovered** a package must satisfy all three of:
 
 1. **Naming**: The `rawbox-plugin-*` prefix (e.g. `rawbox-plugin-example`), optionally inside any scope (e.g. `@acme/rawbox-plugin-example`).
 2. **Keywords**: The keyword `"rawbox-plugin"` in its `package.json`.
@@ -258,7 +258,7 @@ generic directly over TypeBox's `TObject`, which includes a *computed* field:
 `required: TRequiredArray<Properties>`, a tuple type TypeScript evaluates fresh per installed
 copy of `typebox`. When a plugin's `typebox` and `@rawbox/plugin`'s `typebox` were different
 installed copies — which npm's dedupe cannot always prevent; an isolated `node_modules` tree,
-as `workspace setup` produces (see [@rawbox/runner](../rawbox-runner/README.md)), is its own
+as each env `workspace setup` produces (see [@rawbox/runner](../rawbox-runner/README.md)), is its own
 resolution root — TypeScript fell back to comparing that computed tuple structurally and
 refused to unify it. The failure was genuinely confusing: it did **not** say "typebox version
 mismatch". It said something like:
@@ -310,7 +310,7 @@ conditional or mapped type written over the type parameter — even one that loo
 ### Diagnosing a version mismatch
 
 `npx rawbox-cli plugin info <workflow file>` still resolves every declared plugin from the
-workspace's own install and, alongside the usual status and lock report, reports that plugin's
+workflow's own dependency env and, alongside the usual status and lock report, reports that plugin's
 resolved `typebox` version next to the framework's. Since the two no longer have to agree for
 correctness, this is neutral context, not a diagnosis: it states the two resolved versions and
 stops there — it does not prescribe pinning one to the other.
@@ -458,9 +458,10 @@ Two details are load-bearing:
 * **The `node_modules` walk in step 2 is not an optimization.** `require.resolve('<dep>/package.json')` cannot be used: Node's `exports` encapsulation blocks deep imports a package's `exports` map does not list, and every Rawbox plugin declares `exports`. Walking up from the workspace directory also handles hoisting.
 * **Steps 3 and 4 run before the import.** The keyword is the opt-in, and checking the subpath first means a missing export is reported as a skip reason rather than as an opaque module-resolution failure.
 
-Resolution starts from the workspace's target folder (see `resolveTargetFolder`), then the
-workspace directory, then the process cwd — which is what makes `workspace setup` and
-`workflow run` agree on where a plugin lives.
+Resolution starts from the workflow's env, `<target folder>/envs/<hash>/` (see
+`resolveTargetFolder`), then the target folder, the workspace directory and the process
+cwd — which is what makes `workspace setup` and `workflow run` agree on where a plugin
+lives.
 
 ### Registry Cache Hashing
 
@@ -497,7 +498,7 @@ const routed = emitRunEvent({ event: 'log', level: 'info', message: 'checkpoint 
 `emitRunEvent` hands the payload to whatever `RunEventChannel` the host installed via
 `setRunEventChannel` (`@rawbox/plugin/core`) — an **ambient, process-wide slot**
 addressed by a `Symbol.for` key, not a module-level variable, because a plugin
-resolved into a workspace's own `.rawbox/node_modules` is frequently a *different
+resolved into a workflow's own `.rawbox/envs/<hash>/node_modules` is frequently a *different
 copy* of this package than the one the host imported, and only a cross-realm symbol
 registry guarantees both land on the same slot. `@rawbox/runner`'s
 `runWorkflowInstance` installs the channel for the duration of a run and removes it

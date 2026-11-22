@@ -60,7 +60,7 @@ export const Workspace = StrictObject({
    * which makes this document the one place its address belongs.
    *
    * `Workspace` stays closed around it. A record's *keys* are the author's own
-   * ids and so are open, exactly as `plugins:` and `storage.keys` are;
+   * ids and so are open, exactly as `dependencies:` and `storage.keys` are;
    * its *values* are closed (`BackendConnection`), so a misspelt field inside
    * one is still an error rather than a dropped setting.
    */

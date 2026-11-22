@@ -113,7 +113,8 @@ export async function createProject(options: {
     await fs.writeFile(path.join(projectDir, 'tsconfig.base.json'), JSON.stringify(tsconfigBase, null, 2), 'utf-8');
 
     // `.rawbox/` is unrooted, so this one entry also covers every nested
-    // workspace's target folder (`workspaces/*/.rawbox/`) — see
+    // workspace's target folder and the dependency envs installed under it
+    // (`workspaces/*/.rawbox/envs/<hash>/`) — see
     // rawbox-cli README, "Workspace Initialization (`workspace setup`)". `node_modules/` and `dist/` cover what
     // `npm install` and `tsc --build` produce for the scaffolded packages.
     await fs.writeFile(
@@ -208,7 +209,7 @@ export async function createProject(options: {
           formatVersion: FORMAT_VERSION,
           name: 'example',
           description: 'Greets a name using the scaffolded example plugin.',
-          plugins: { [EXAMPLE_PLUGIN_PACKAGE]: EXAMPLE_PLUGIN_SPECIFIER },
+          dependencies: { [EXAMPLE_PLUGIN_PACKAGE]: EXAMPLE_PLUGIN_SPECIFIER },
           storage: {
             defaultStrategy: { ...DEFAULT_STORAGE_STRATEGY },
             keys: { greeting_name: { seed: 'World' } },
@@ -232,9 +233,9 @@ export async function createProject(options: {
           `  npx rawbox-cli workflow verify ./workflows/example.workflow.yaml`,
         [
           {
-            path: ['plugins'],
+            path: ['dependencies'],
             before:
-              `Plugins: package name -> npm dependency specifier, the shape of\n` +
+              `Dependencies: package name -> npm dependency specifier, the shape of\n` +
               `\`dependencies\` in a package.json. A \`file:\` specifier is resolved\n` +
               `against the workspace directory — the one holding workspace.yaml — not\n` +
               `against this file, so it points at packages/ two levels up.\n` +
@@ -243,7 +244,7 @@ export async function createProject(options: {
               `\`rawbox.lock\` beside workspace.yaml, never here:\n` +
               `  npx rawbox-cli workflow lock ./workflows/example.workflow.yaml`,
           },
-          { path: ['plugins', EXAMPLE_PLUGIN_PACKAGE], quote: true },
+          { path: ['dependencies', EXAMPLE_PLUGIN_PACKAGE], quote: true },
           {
             path: ['storage'],
             before:
@@ -307,7 +308,7 @@ export async function createProject(options: {
           {
             path: ['steps'],
             before:
-              `Steps run top to bottom. \`plugin:\` is a key of \`plugins:\` above, matched\n` +
+              `Steps run top to bottom. \`plugin:\` is a key of \`dependencies:\` above, matched\n` +
               `exactly; \`operation:\` is the contract path inside that plugin, so\n` +
               `\`operations/hello-world\` addresses\n` +
               `"./operations/hello-world.definition.js" in its contract registry —\n` +
@@ -346,7 +347,7 @@ export async function createProject(options: {
           formatVersion: FORMAT_VERSION,
           name: 'monitor',
           description: 'Empty starting point for a second workflow.',
-          plugins: {},
+          dependencies: {},
           storage: { defaultStrategy: { ...DEFAULT_STORAGE_STRATEGY } },
           steps: [],
         },
@@ -356,21 +357,21 @@ export async function createProject(options: {
           `it stands, and grows from here.\n` +
           `  npx rawbox-cli workflow verify ./workflows/monitor.workflow.yaml\n` +
           `\n` +
-          `Workflows in one workspace share a \`rawbox.lock\` — it is keyed by package,\n` +
-          `so declaring "${EXAMPLE_PLUGIN_PACKAGE}" here too costs one line, not a\n` +
-          `second resolved version.`,
+          `Workflows with identical \`dependencies:\` share one installed env,\n` +
+          `.rawbox/envs/<hash>/, and one \`rawbox.lock\` entry per package, so declaring\n` +
+          `"${EXAMPLE_PLUGIN_PACKAGE}" here too costs one line, not a second install.`,
         [
           {
-            path: ['plugins'],
+            path: ['dependencies'],
             before:
-              `Plugins: package name -> npm dependency specifier. To reuse the plugin\n` +
+              `Dependencies: package name -> npm dependency specifier. To reuse the plugin\n` +
               `example.workflow.yaml declares:\n` +
               `\n` +
-              `  plugins:\n` +
+              `  dependencies:\n` +
               `    "${EXAMPLE_PLUGIN_PACKAGE}": "${EXAMPLE_PLUGIN_SPECIFIER}"\n` +
               `\n` +
-              `Both workflows must spell the specifier identically; \`workspace verify\`\n` +
-              `reports a disagreement as an error.`,
+              `Spelt identically, both workflows share one env, .rawbox/envs/<hash>/. A\n` +
+              `different specifier is allowed too: it installs into an env of its own.`,
           },
           {
             path: ['storage'],

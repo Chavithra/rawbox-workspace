@@ -12,6 +12,7 @@ import {
   discoverWorkspace,
   loadPluginContractRegistry,
   parseConfig,
+  resolveDependencyEnvDir,
   resolveTargetFolder,
   resolveWorkflow,
   collectBackendEnvProblems,
@@ -794,19 +795,26 @@ export async function verifyWorkflow(
     }
 
     // -- 3. Plugin registries ----------------------------------------------
-    // The workspace's target folder leads, for the same reason it leads in
-    // `runWorkflowInstance`: it is where `workspace setup` installed the
-    // packages this workflow declared. It defaults to the workspace directory,
-    // so for a workspace that declares no `targetFolder:` this list is
-    // unchanged apart from the duplicate the dedup below removes.
+    // This workflow's env under the workspace's target folder leads, then the
+    // target folder itself, for the same reason they lead in
+    // `runWorkflowInstance`: the env is where `workspace setup` installed the
+    // exact packages this workflow declared.
     const targetFolder =
       scratchWorkspaceName !== undefined
         ? resolveTargetFolder(workspaceDirectory!, {})
         : workspaceFile
           ? await resolveWorkspaceTargetFolderOrWarn(path.resolve(process.cwd(), workspaceFile))
           : undefined;
+    const envDir = targetFolder
+      ? resolveDependencyEnvDir(
+          targetFolder,
+          workflow.dependencies,
+          workspaceDirectory ?? workflowDirectory,
+        )
+      : undefined;
     const searchDirectoryList = [
       ...new Set([
+        ...(envDir ? [envDir] : []),
         ...(targetFolder ? [targetFolder] : []),
         ...(workspaceDirectory ? [workspaceDirectory] : []),
         workflowDirectory,
@@ -814,7 +822,7 @@ export async function verifyWorkflow(
       ]),
     ];
 
-    const declaredPackageList = Object.keys(workflow.plugins);
+    const declaredPackageList = Object.keys(workflow.dependencies);
     const { registryCache, registryHashByPlugin, failureList } =
       await loadPluginRegistries(declaredPackageList, searchDirectoryList);
 

@@ -112,7 +112,7 @@ function makeWorkflow(overrides: Partial<Workflow> = {}): Workflow {
     kind: 'Workflow',
     formatVersion: '1.0',
     name: 'example',
-    plugins: { [DEFAULT_PLUGIN]: '^1.0.0' },
+    dependencies: { [DEFAULT_PLUGIN]: '^1.0.0' },
     storage: { defaultStrategy: KV },
     steps: [],
     ...overrides,
@@ -203,7 +203,7 @@ describe('resolveWorkflow — step addressing', () => {
 
   it('keeps two plugins apart', () => {
     const workflow = makeWorkflow({
-      plugins: { [DEFAULT_PLUGIN]: '^1.0.0', [KRAKEN_PLUGIN]: 'file:../kraken' },
+      dependencies: { [DEFAULT_PLUGIN]: '^1.0.0', [KRAKEN_PLUGIN]: 'file:../kraken' },
       storage: { defaultStrategy: KV, keys: { queue_items: { strategy: FIFO } } },
       steps: [
         sleepStep,
@@ -267,7 +267,7 @@ describe('resolveWorkflow — storage bindings', () => {
 
   it('carries `workflow:` through on a cross-workflow read, and only there', () => {
     const workflow = makeWorkflow({
-      plugins: { [KRAKEN_PLUGIN]: 'file:../kraken' },
+      dependencies: { [KRAKEN_PLUGIN]: 'file:../kraken' },
       steps: [
         {
           label: 'drain-step',
@@ -300,7 +300,7 @@ describe('resolveWorkflow — storage bindings', () => {
 
   it('takes a FIFO strategy from the keys: entry that declares it', () => {
     const workflow = makeWorkflow({
-      plugins: { [KRAKEN_PLUGIN]: 'file:../kraken' },
+      dependencies: { [KRAKEN_PLUGIN]: 'file:../kraken' },
       storage: {
         defaultStrategy: KV,
         keys: {
@@ -698,8 +698,8 @@ describe('resolveWorkflow — the removed { value: … } binding', () => {
 describe('resolveWorkflow — rawbox.lock verification', () => {
   function lockWith(registryHash: string): RawboxLock {
     return {
-      version: '1',
-      plugins: { [DEFAULT_PLUGIN]: { resolved: '1.0.0', registryHash } },
+      version: '2',
+      dependencies: { [DEFAULT_PLUGIN]: { '^1.0.0': { resolved: '1.0.0', registryHash } } },
     };
   }
 
@@ -736,19 +736,43 @@ describe('resolveWorkflow — rawbox.lock verification', () => {
     // packages other workflows in the workspace use.
     const workflow = makeWorkflow({ steps: [sleepStep] as Workflow['steps'] });
     const lock: RawboxLock = {
-      version: '1',
-      plugins: {
-        [DEFAULT_PLUGIN]: { resolved: '1.0.0', registryHash: DEFAULT_HASH },
-        [KRAKEN_PLUGIN]: { resolved: '2.0.0', registryHash: 'a'.repeat(64) },
+      version: '2',
+      dependencies: {
+        [DEFAULT_PLUGIN]: { '^1.0.0': { resolved: '1.0.0', registryHash: DEFAULT_HASH } },
+        [KRAKEN_PLUGIN]: { '^2.0.0': { resolved: '2.0.0', registryHash: 'a'.repeat(64) } },
       },
     };
 
     expect(resolveWorkflow(workflow, makeCache(), DEFAULT_MAP, lock).isOk()).toBe(true);
   });
 
+  it('checks only the entry for the declared specifier, not a sibling pin of the same package', () => {
+    // Another workflow of the workspace pins `^2.0.0` into its own env; its
+    // entry must not be held against this workflow's `^1.0.0` install.
+    const workflow = makeWorkflow({ steps: [sleepStep] as Workflow['steps'] });
+    const lock: RawboxLock = {
+      version: '2',
+      dependencies: {
+        [DEFAULT_PLUGIN]: {
+          '^1.0.0': { resolved: '1.0.0', registryHash: DEFAULT_HASH },
+          '^2.0.0': { resolved: '2.0.0', registryHash: 'b'.repeat(64) },
+        },
+      },
+    };
+    expect(resolveWorkflow(workflow, makeCache(), DEFAULT_MAP, lock).isOk()).toBe(true);
+
+    const mismatched = makeWorkflow({
+      dependencies: { [DEFAULT_PLUGIN]: '^2.0.0' },
+      steps: [sleepStep] as Workflow['steps'],
+    });
+    expect(expectErr(resolveWorkflow(mismatched, makeCache(), DEFAULT_MAP, lock))).toContain(
+      'b'.repeat(64),
+    );
+  });
+
   it('accepts a partial lock that has no entry for a declared package', () => {
     const workflow = makeWorkflow({ steps: [sleepStep] as Workflow['steps'] });
-    const lock: RawboxLock = { version: '1', plugins: {} };
+    const lock: RawboxLock = { version: '2', dependencies: {} };
     expect(resolveWorkflow(workflow, makeCache(), DEFAULT_MAP, lock).isOk()).toBe(true);
   });
 });
@@ -756,7 +780,7 @@ describe('resolveWorkflow — rawbox.lock verification', () => {
 describe('resolveWorkflow — plugin/registry mapping', () => {
   it('reports a declared package absent from the supplied map, listing what was supplied', () => {
     const workflow = makeWorkflow({
-      plugins: { [DEFAULT_PLUGIN]: '^1.0.0', [KRAKEN_PLUGIN]: 'file:../kraken' },
+      dependencies: { [DEFAULT_PLUGIN]: '^1.0.0', [KRAKEN_PLUGIN]: 'file:../kraken' },
       steps: [sleepStep] as Workflow['steps'],
     });
 
@@ -774,7 +798,7 @@ describe('resolveWorkflow — plugin/registry mapping', () => {
 
   it('suggests the nearest supplied package name on a near miss', () => {
     const workflow = makeWorkflow({
-      plugins: { '@rawbox/rawbox-plugin-defualt': '^1.0.0' },
+      dependencies: { '@rawbox/rawbox-plugin-defualt': '^1.0.0' },
       steps: [
         { ...sleepStep, plugin: '@rawbox/rawbox-plugin-defualt' },
       ] as Workflow['steps'],
@@ -816,7 +840,7 @@ describe('resolveWorkflow — error quality', () => {
 
     const message = expectErr(resolveWorkflow(workflow, makeCache(), DEFAULT_MAP));
 
-    expect(message).toContain('is not declared in `plugins:`');
+    expect(message).toContain('is not declared in `dependencies:`');
     expect(message).toContain(`- ${DEFAULT_PLUGIN}`);
     expect(message).toContain(`Did you mean "${DEFAULT_PLUGIN}"?`);
   });
@@ -880,7 +904,7 @@ describe('resolveWorkflow — control-flow type cross-check', () => {
     // anywhere, and as long as the step declares no outputs it resolves fine.
     const registry = makeRegistry(pickContracts);
     const workflow = makeWorkflow({
-      plugins: { [KRAKEN_PLUGIN]: 'file:../kraken' },
+      dependencies: { [KRAKEN_PLUGIN]: 'file:../kraken' },
       steps: [
         {
           label: 'pick',
@@ -908,7 +932,7 @@ describe('resolveWorkflow — control-flow type cross-check', () => {
     // so only the resolver can see that the contract has no outputSchema.
     const registry = makeRegistry(pickContracts);
     const workflow = makeWorkflow({
-      plugins: { [KRAKEN_PLUGIN]: 'file:../kraken' },
+      dependencies: { [KRAKEN_PLUGIN]: 'file:../kraken' },
       steps: [
         {
           label: 'pick',
@@ -942,7 +966,7 @@ describe('resolveWorkflow — control-flow type cross-check', () => {
       },
     });
     const workflow = makeWorkflow({
-      plugins: { [KRAKEN_PLUGIN]: 'file:../kraken' },
+      dependencies: { [KRAKEN_PLUGIN]: 'file:../kraken' },
       steps: [
         {
           label: 'tally',
@@ -966,7 +990,7 @@ describe('resolveWorkflow — control-flow type cross-check', () => {
       './weird/thing.definition.js': { type: 'trigger', inputSchema: Type.Object({}) },
     });
     const workflow = makeWorkflow({
-      plugins: { [KRAKEN_PLUGIN]: 'file:../kraken' },
+      dependencies: { [KRAKEN_PLUGIN]: 'file:../kraken' },
       steps: [
         { label: 'w', plugin: KRAKEN_PLUGIN, operation: 'weird/thing' },
       ] as Workflow['steps'],
@@ -1155,7 +1179,7 @@ describe('resolveWorkflow — every key fact comes off the key table', () => {
     return expectOk(
       resolveWorkflow(
         makeWorkflow({
-          plugins: { [KRAKEN_PLUGIN]: 'file:../kraken' },
+          dependencies: { [KRAKEN_PLUGIN]: 'file:../kraken' },
           storage: STORAGE,
           steps: STEP_LIST,
         }),

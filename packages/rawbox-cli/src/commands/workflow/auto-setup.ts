@@ -1,32 +1,39 @@
 /**
  * `workflow run`'s auto-setup step (rawbox-cli README, "Execute Workflow (`run` / `workflow run`)"), made
- * mutually exclusive per target folder via `setup-lock.ts`.
+ * mutually exclusive per dependency env directory via `setup-lock.ts`.
  *
  * The hazard this closes: several `rawbox-cli run` processes started
- * concurrently against workflows of *one* workspace — the documented
- * multi-workflow pattern — each run their own cheap
- * `PluginDiscoverer.findUnresolvedPlugins` pre-check, each find the same
- * plugin missing, and each would call `setupWorkspace`/`setupNpmPackage`
- * (an `npm install`) into the very same target folder at the same time. npm
- * does not tolerate two concurrent installs sharing one prefix.
+ * concurrently against workflows declaring the same `dependencies:` map —
+ * and therefore the same env, `<targetFolder>/envs/<hash>/` — each run their
+ * own cheap {@link findUnresolvedInEnv} pre-check, each find the env not yet
+ * installed, and each would call `setupDependencyEnv` (an `npm install`) into
+ * the very same env directory at the same time. npm does not tolerate two
+ * concurrent installs sharing one prefix.
  *
  * The algorithm, independent of the CLI plumbing around it (kept here so it
  * is unit-testable without spawning a child process per scenario):
  *
  * 1. The initial "is anything even missing" decision is unlocked — the
- *    common case (everything already resolves) must never touch the
+ *    common case (the env is already installed) must never touch the
  *    filesystem lock at all.
- * 2. Otherwise, race for the lock. The winner runs `deps.install` and
+ * 2. Otherwise, race for the env's lock. The winner runs `deps.install` and
  *    releases the lock in a `finally`, whether it succeeded or not.
  * 3. A loser waits (bounded) for the lock to disappear, then re-runs the
- *    same cheap pre-check. If the winner already installed everything this
- *    process needed too, it proceeds having installed nothing itself
- *    (`'joined-existing-install'`). If something is still missing — e.g.
- *    two workflows in the same workspace declaring different plugin sets —
- *    it loops back and races for the lock itself.
+ *    same cheap pre-check. If the winner already installed the env, it
+ *    proceeds having installed nothing itself (`'joined-existing-install'`).
+ *    If the env is still not ready — the winner's install failed, say — it
+ *    loops back and races for the lock itself. Workflows declaring different
+ *    `dependencies:` maps never meet here at all: they hash to different env
+ *    directories, take different locks, and install in parallel.
  * 4. A bounded wait that expires is reported as a failure naming the lock
  *    path, never as a silent proceed.
  */
+
+import { existsSync } from 'node:fs';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+import { DEPENDENCY_ENV_READY_FILENAME, PluginDiscoverer } from '@rawbox/runner';
 
 import {
   acquireSetupLock,
@@ -43,18 +50,18 @@ export interface AutoSetupLogger {
 }
 
 export type AutoSetupInstallResult =
-  | { ok: true; targetFolder: string }
+  | { ok: true; envDir: string }
   | { ok: false; error: string };
 
 export interface AutoSetupDeps {
   /**
-   * The cheap resolution pre-check: names of declared plugins that do NOT
-   * currently resolve. Called more than once (before locking, and again by
+   * The cheap pre-check: names of declared plugins the env does NOT
+   * currently provide. Called more than once (before locking, and again by
    * a loser after waiting) — must be cheap and side-effect-free, which
-   * `PluginDiscoverer.findUnresolvedPlugins` already is.
+   * {@link findUnresolvedInEnv} is.
    */
   findUnresolved: () => string[];
-  /** Performs the real install — `setupWorkspace`/`setupNpmPackage` — while this process holds the lock. */
+  /** Performs the real install — `setupDependencyEnv` — while this process holds the lock. */
   install: () => Promise<AutoSetupInstallResult>;
   logger: AutoSetupLogger;
   /** Forwarded to `acquireSetupLock`/`waitForSetupLockRelease`; tests use this to inject a fake pid probe or shrink the wait bound. */
@@ -63,12 +70,34 @@ export interface AutoSetupDeps {
 
 export type AutoSetupOutcome =
   | { kind: 'not-needed' }
-  | { kind: 'installed'; targetFolder: string }
+  | { kind: 'installed'; envDir: string }
   | { kind: 'joined-existing-install' }
   | { kind: 'failed'; message: string };
 
 /**
- * Runs the algorithm described above against `targetFolder`.
+ * The declared plugins `envDir` does not provide: every one of them while the
+ * env's `.rawbox-env-ready.json` is missing, otherwise those that do not
+ * resolve from `envDir`.
+ *
+ * The ready marker is checked first because name resolution alone cannot
+ * tell versions apart. After a specifier changes, the new env does not exist
+ * yet, but the package name may still resolve from `<targetFolder>/node_modules`,
+ * a hoisted copy, or the cwd — and the run would silently use whatever
+ * version it found there.
+ */
+export function findUnresolvedInEnv(
+  envDir: string,
+  declaredPluginList: readonly string[],
+): string[] {
+  if (!existsSync(path.join(envDir, DEPENDENCY_ENV_READY_FILENAME))) {
+    return [...declaredPluginList];
+  }
+  return PluginDiscoverer.findUnresolvedPlugins(declaredPluginList, { resolveFrom: [envDir] });
+}
+
+/**
+ * Runs the algorithm described above against `envDir`, creating it first so
+ * the lock file has somewhere to live.
  *
  * `forceSetup` (`--setup`) only affects the *initial* decision to attempt an
  * install at all — it does not skip the lock (point 3 of the fix: "`--setup`
@@ -78,7 +107,7 @@ export type AutoSetupOutcome =
  * identical either way.
  */
 export async function performAutoSetup(
-  targetFolder: string,
+  envDir: string,
   forceSetup: boolean,
   deps: AutoSetupDeps,
 ): Promise<AutoSetupOutcome> {
@@ -88,8 +117,10 @@ export async function performAutoSetup(
     return { kind: 'not-needed' };
   }
 
+  await fs.mkdir(envDir, { recursive: true });
+
   for (;;) {
-    const acquireResult = await acquireSetupLock(targetFolder, {
+    const acquireResult = await acquireSetupLock(envDir, {
       ...lockOptions,
       onStaleRecovery: (info) => {
         logger.warn(
@@ -103,10 +134,10 @@ export async function performAutoSetup(
       try {
         const result = await install();
         return result.ok
-          ? { kind: 'installed', targetFolder: result.targetFolder }
+          ? { kind: 'installed', envDir: result.envDir }
           : { kind: 'failed', message: result.error };
       } finally {
-        await releaseSetupLock(setupLockPathFor(targetFolder));
+        await releaseSetupLock(setupLockPathFor(envDir));
       }
     }
 
@@ -114,7 +145,7 @@ export async function performAutoSetup(
     logger.info(
       'Auto-setup already in progress' +
         (holderPid !== undefined ? ` (pid ${holderPid})` : '') +
-        ` — waiting for it to finish setting up "${targetFolder}"...`,
+        ` — waiting for it to finish setting up "${envDir}"...`,
     );
 
     const waitResult = await waitForSetupLockRelease(acquireResult.lockPath, lockOptions);

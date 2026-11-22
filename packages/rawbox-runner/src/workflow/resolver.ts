@@ -13,6 +13,7 @@ import type {
 } from '@rawbox/plugin/core';
 
 import type { RawboxLock } from './lock-types.js';
+import { canonicalLockSpecifier } from './dependency-env.js';
 import {
   checkFifoSeedIsList,
   collectLiteralBindingProblems,
@@ -193,7 +194,7 @@ interface ResolvedPlugin {
  *
  * - `plugin:` → `contractRegistryHash`, a direct lookup in
  *   `registryHashByPlugin`. A step naming a package that is not a key of
- *   `plugins:` lists the declared packages and suggests the nearest; a declared
+ *   `dependencies:` lists the declared packages and suggests the nearest; a declared
  *   package absent from the supplied map lists the map's keys.
  * - `operation:` → `definitionPath: "./<operation>.definition.js"`, including
  *   nested control-flow paths. An unmatched value lists the registry's contract
@@ -283,7 +284,7 @@ export function resolveWorkflow(
   errors.push(...collectStorageOwnershipProblems(workflow));
 
   // -- Plugin → registry -----------------------------------------------------
-  const declaredPackages = Object.keys(workflow.plugins);
+  const declaredPackages = Object.keys(workflow.dependencies);
   const suppliedPackages = Object.keys(registryHashByPlugin);
   const resolvedPlugins = new Map<string, ResolvedPlugin>();
 
@@ -293,7 +294,7 @@ export function resolveWorkflow(
     if (hash === undefined) {
       const suggestion = nearestMatch(packageName, suppliedPackages);
       errors.push(
-        `Plugin "${packageName}" is declared in \`plugins:\` but no contract registry ` +
+        `Plugin "${packageName}" is declared in \`dependencies:\` but no contract registry ` +
           `was loaded for it.\n` +
           `Registries were loaded for (${suppliedPackages.length}):\n` +
           `${bulletList(suppliedPackages)}` +
@@ -322,10 +323,15 @@ export function resolveWorkflow(
   // -- rawbox.lock verification ----------------------------------------------
   // A missing lock means "resolve whatever is installed"; a missing *entry* in
   // a present lock is treated the same way, so a partially locked workspace is
-  // usable. A present entry that disagrees is a hard error.
+  // usable. A present entry that disagrees is a hard error. Entries are keyed
+  // by specifier too, so only the one matching this workflow's declaration
+  // applies — a sibling pinning another version has its own.
   if (lock) {
     for (const packageName of declaredPackages) {
-      const entry = lock.plugins[packageName];
+      const entry =
+        lock.dependencies[packageName]?.[
+          canonicalLockSpecifier(workflow.dependencies[packageName] as string)
+        ];
       const resolved = resolvedPlugins.get(packageName);
       if (!entry || !resolved) continue;
       if (entry.registryHash !== resolved.hash) {
@@ -346,10 +352,10 @@ export function resolveWorkflow(
   workflow.steps.forEach((step, index) => {
     const where = describeStep(step, index);
 
-    if (!Object.prototype.hasOwnProperty.call(workflow.plugins, step.plugin)) {
+    if (!Object.prototype.hasOwnProperty.call(workflow.dependencies, step.plugin)) {
       const suggestion = nearestMatch(step.plugin, declaredPackages);
       errors.push(
-        `${where}: plugin "${step.plugin}" is not declared in \`plugins:\`.\n` +
+        `${where}: plugin "${step.plugin}" is not declared in \`dependencies:\`.\n` +
           `Declared packages:\n${bulletList(declaredPackages)}` +
           (suggestion ? `\nDid you mean "${suggestion}"?` : ''),
       );

@@ -321,7 +321,7 @@ describe('bare-specifier fallback', () => {
     // fail rather than record a version and hash that describe the runner's own
     // installation of the plugin instead of the workspace's.
     const result = await resolvePluginLockEntries(
-      [RUNNER_VISIBLE_PLUGIN],
+      { [RUNNER_VISIBLE_PLUGIN]: '*' },
       emptyBaseA,
     );
 

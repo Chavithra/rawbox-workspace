@@ -8,7 +8,7 @@ rules rather than arguing for them; where a rule exists for a reason that is not
 the rule itself, the reason is recorded beside the code that implements it.
 
 **Every document is closed.** An unrecognised field is an error, never ignored. The keys of a
-map an author owns — `plugins`, `storage.keys`, `backends`, a step's bindings — are values,
+map an author owns — `dependencies`, `storage.keys`, `backends`, a step's bindings — are values,
 not fields, and are unconstrained by that rule.
 
 ---
@@ -35,7 +35,7 @@ formatVersion: "1.0"
 name: launch
 description: "Optional, free text."
 
-plugins:
+dependencies:
   "@rawbox/rawbox-plugin-default": "^0.1.0"
 
 storage:
@@ -65,17 +65,17 @@ steps:
 | `formatVersion` | yes | `"1.0"` |
 | `name` | yes | non-empty string |
 | `description` | no | string |
-| `plugins` | yes | map of package name → npm specifier (§2.1) |
+| `dependencies` | yes | map of package name → npm specifier (§2.1) |
 | `storage` | yes | storage block (§2.2) |
 | `steps` | yes | array of steps (§2.3) |
 
-### 2.1. `plugins`
+### 2.1. `dependencies`
 
 Package name → npm dependency specifier, exactly the shape of `dependencies` in a
 `package.json`, handed to npm verbatim.
 
 ```yaml
-plugins:
+dependencies:
   "@rawbox/rawbox-plugin-default": "^0.1.0"                  # registry
   "@acme/rawbox-plugin-kraken": "file:../packages/kraken"    # local path
   "@acme/rawbox-plugin-exp": "git+https://…/exp.git#main"    # git
@@ -84,7 +84,12 @@ plugins:
 - Keys MUST be canonical package names.
 - A package MAY appear at most once. A duplicate is a parse error, not a validation one.
 - A relative `file:` specifier resolves against the **workspace directory**.
-- No integrity hashes appear here; they live in the lock file.
+- Each distinct `dependencies:` map is installed into its own environment,
+  `<targetFolder>/envs/<hash>/`. Workflows with identical maps share one environment.
+- Workflows in one workspace MAY declare different specifiers for the same package.
+- No integrity hashes appear here; they live in the lock file, `rawbox.lock`, beside the
+  workspace document: `version: "2"` and `dependencies`, a map of package name → canonical
+  specifier → `{ resolved, registryHash }`.
 
 ### 2.2. `storage`
 
@@ -163,7 +168,7 @@ Steps execute in order until a control-flow step redirects or the list ends.
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `label` | no | Non-empty name, addressable as a jump target |
-| `plugin` | yes | A package named in `plugins` |
+| `plugin` | yes | A package named in `dependencies` |
 | `operation` | yes | `segment/segment…`, e.g. `time/sleep` |
 | `inputs` | no | Map of handler field → storage key |
 | `outputs` | no | Map of handler field → storage key |
@@ -250,7 +255,7 @@ logs:
 | `kind` | yes | `"Workspace"` |
 | `name` | yes | string |
 | `workflowPathList` | yes | Paths to the workflow documents, relative to this file |
-| `targetFolder` | no | Where installed plugins and data live. Defaults to `.rawbox` |
+| `targetFolder` | no | Where installed dependency environments and data live. Defaults to `.rawbox` |
 | `backends` | no | Map of backend id → connection (§3.1) |
 | `seedOverrides` | no | Map of workflow path → seed replacements (§3.2) |
 | `logs` | no | How this workspace's run logs are written, rotated and pruned (§3.3) |

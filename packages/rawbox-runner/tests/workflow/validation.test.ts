@@ -45,7 +45,7 @@ function baseDocument(): Record<string, unknown> {
     kind: 'Workflow',
     formatVersion: '1.0',
     name: 'example',
-    plugins: { '@rawbox/rawbox-plugin-default': '^1.0.0' },
+    dependencies: { '@rawbox/rawbox-plugin-default': '^1.0.0' },
     // `sleep_ms` is seeded because the step below reads it, and a key that no
     // step writes and no seed sets is rejected. A base document every other
     // case is spliced from has to be valid on its own.
@@ -172,7 +172,7 @@ describe('validateWorkflowType', () => {
 
   it('reports schema violations once the document is identified as a workflow', () => {
     const document = baseDocument();
-    delete document.plugins;
+    delete document.dependencies;
 
     const result = validateWorkflowType(document);
 
@@ -388,7 +388,7 @@ describe('validateWorkflowType — how timeoutMs is spelled', () => {
         'kind: Workflow',
         'formatVersion: "1.0"',
         'name: example',
-        'plugins:',
+        'dependencies:',
         '  "@rawbox/rawbox-plugin-default": "^1.0.0"',
         'storage:',
         '  defaultStrategy:',
@@ -2162,7 +2162,7 @@ describe('validateSeedData', () => {
         kind: 'Workflow',
         formatVersion: '1.0',
         name: 'test-wf',
-        plugins: { [PLUGIN]: '^1.0.0' },
+        dependencies: { [PLUGIN]: '^1.0.0' },
         storage: {
           defaultStrategy: KV,
           keys: { is_ready: { seed: true }, then_label: { seed: thenLabelSeed } },

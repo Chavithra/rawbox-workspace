@@ -13,7 +13,7 @@ import { registryHash } from './commands/registry/hash.js';
 import { verifyWorkspace } from './commands/workspace/verify.js';
 import { verifyWorkflow } from './commands/workflow/verify.js';
 import { runCommandDefinition } from './commands/workflow/run.js';
-import { setupWorkspaceCommand } from './commands/workspace/setup.js';
+import { setupCommandDefinition } from './commands/workspace/setup.js';
 import { pluginInfo } from './commands/plugin/info.js';
 import { lockWorkflow } from './commands/workflow/lock.js';
 import { runsListCommand } from './commands/runs/list.js';
@@ -203,7 +203,7 @@ const cli = yargs(hideBin(process.argv))
                 description:
                   'Write an .npmrc beside the generated workspace.yaml routing the @rawbox ' +
                   'scope to this registry URL (http/https), e.g. a local Verdaccio. ' +
-                  '`workspace setup` copies it into the target folder so its installs honour it.',
+                  '`workspace setup` copies it into each dependency env so its installs honour it.',
                 type: 'string',
                 requiresArg: true,
               });
@@ -218,34 +218,9 @@ const cli = yargs(hideBin(process.argv))
         )
         .command(
           'setup <workspace-path> [target-folder]',
-          'Prepares a workspace runner target folder, generating files and downloading/linking plugin dependencies.',
-          (yargs) => {
-            return yargs
-              .positional('workspace-path', {
-                description: 'Path to the workspace configuration JSON file',
-                type: 'string',
-              })
-              .positional('target-folder', {
-                description:
-                  'Path to the target runner environment directory where plugins are linked and package.json is initialized. ' +
-                  'Defaults to `targetFolder:` in the workspace file, and failing that to the workspace directory itself.',
-                type: 'string',
-              })
-              .option('install-links', {
-                description:
-                  'Copy `file:` plugins and install their own dependencies instead of symlinking them, making the target folder portable. ' +
-                  'The default symlink keeps a locally developed plugin live: rebuild it and the next run picks it up with no second setup.',
-                type: 'boolean',
-                default: false,
-              });
-          },
-          async (argv) => {
-            await setupWorkspaceCommand(
-              argv['workspace-path'] as string,
-              argv['target-folder'] as string | undefined,
-              { installLinks: argv['install-links'] as boolean },
-            );
-          }
+          'Installs each distinct workflow `dependencies:` map into its own env, <target folder>/envs/<hash>/, and prunes envs no workflow references.',
+          setupCommandDefinition.builder,
+          setupCommandDefinition.handler,
         )
         .command(
           'verify <file>',

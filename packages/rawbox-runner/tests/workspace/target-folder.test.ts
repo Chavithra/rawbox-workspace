@@ -10,6 +10,7 @@ import { PluginDiscoverer } from '../../src/workflow/plugin-discoverer.js';
 import { setupWorkspace } from '../../src/tool/setup-workspace.js';
 import { runWorkflowInstance, dedupePathList } from '../../src/tool/run-workflow.js';
 import { resolveTargetFolder, RAWBOX_DOT_FOLDER } from '../../src/workspace/workspace-types.js';
+import { resolveDependencyEnvDir } from '../../src/workflow/dependency-env.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -84,6 +85,13 @@ const defaultWorkflowFile = path.join(
 );
 const defaultTargetFolder = path.join(defaultWorkspaceDir, '.rawbox');
 
+/** Both workflows declare exactly this, so both install into one env hash. */
+const FIXTURE_DEPENDENCIES = { [FIXTURE_PLUGIN]: `file:${pluginDir}` };
+
+/** `<targetFolder>/envs/<hash>`, where `workspace setup` installs the fixture. */
+const envDir = resolveDependencyEnvDir(targetDir, FIXTURE_DEPENDENCIES) as string;
+const defaultEnvDir = resolveDependencyEnvDir(defaultTargetFolder, FIXTURE_DEPENDENCIES) as string;
+
 /**
  * Clones the built default plugin under {@link FIXTURE_PLUGIN}.
  *
@@ -135,7 +143,7 @@ async function writeWorkspace(): Promise<void> {
       kind: 'Workflow',
       formatVersion: '1.0',
       name: WORKFLOW_NAME,
-      plugins: { [FIXTURE_PLUGIN]: `file:${pluginDir}` },
+      dependencies: { [FIXTURE_PLUGIN]: `file:${pluginDir}` },
       storage: {
         defaultStrategy: { name: 'lmdb-kv', valueSizeMax: 1900 },
         keys: {
@@ -189,7 +197,7 @@ async function writeDefaultWorkspace(): Promise<void> {
       kind: 'Workflow',
       formatVersion: '1.0',
       name: WORKFLOW_NAME,
-      plugins: { [FIXTURE_PLUGIN]: `file:${pluginDir}` },
+      dependencies: { [FIXTURE_PLUGIN]: `file:${pluginDir}` },
       storage: {
         defaultStrategy: { name: 'lmdb-kv', valueSizeMax: 1900 },
         keys: {
@@ -286,14 +294,15 @@ describe('a plugin installed only into a separate target folder', () => {
     // No second argument: the folder comes from `targetFolder:` in the document.
     const result = await setupWorkspace(workspaceFile);
     expect(result.isOk(), result.isErr() ? result.error : '').toBe(true);
-    expect(result._unsafeUnwrap()).toBe(path.resolve(targetDir));
+    expect(result._unsafeUnwrap().targetFolder).toBe(path.resolve(targetDir));
+    expect(result._unsafeUnwrap().envs.map((env) => env.envDir)).toEqual([envDir]);
 
     const manifest = JSON.parse(
-      await fs.readFile(path.join(targetDir, 'package.json'), 'utf-8'),
+      await fs.readFile(path.join(envDir, 'package.json'), 'utf-8'),
     );
     expect(manifest.dependencies[FIXTURE_PLUGIN]).toBe(`file:${pluginDir}`);
     expect(
-      await fs.stat(path.join(targetDir, 'node_modules', FIXTURE_PLUGIN)),
+      await fs.stat(path.join(envDir, 'node_modules', FIXTURE_PLUGIN)),
     ).toBeDefined();
   }, 300_000);
 
@@ -306,8 +315,10 @@ describe('a plugin installed only into a separate target folder', () => {
     expect(await loadFrom([repoRoot])).toContain(FIXTURE_PLUGIN);
     expect(await loadFrom([workspaceDir, repoRoot])).toMatch(/Cannot find package/);
 
-    // ...and resolves from the target folder, which is the only place it lives.
-    expect(await loadFrom([targetDir])).toBeUndefined();
+    // ...and resolves from the workflow's env, which is the only place it
+    // lives — not even the target folder's own `node_modules` holds it.
+    expect(await loadFrom([targetDir])).toContain(FIXTURE_PLUGIN);
+    expect(await loadFrom([envDir])).toBeUndefined();
   });
 
   it('runs to completion from an unrelated cwd', async () => {
@@ -353,14 +364,14 @@ describe('a plugin installed only into the default `.rawbox` target folder', () 
   it('is installed there by `workspace setup` with no target-folder argument and no `targetFolder:` declared', async () => {
     const result = await setupWorkspace(defaultWorkspaceFile);
     expect(result.isOk(), result.isErr() ? result.error : '').toBe(true);
-    expect(result._unsafeUnwrap()).toBe(path.resolve(defaultTargetFolder));
+    expect(result._unsafeUnwrap().targetFolder).toBe(path.resolve(defaultTargetFolder));
 
     const manifest = JSON.parse(
-      await fs.readFile(path.join(defaultTargetFolder, 'package.json'), 'utf-8'),
+      await fs.readFile(path.join(defaultEnvDir, 'package.json'), 'utf-8'),
     );
     expect(manifest.dependencies[FIXTURE_PLUGIN]).toBe(`file:${pluginDir}`);
     expect(
-      await fs.stat(path.join(defaultTargetFolder, 'node_modules', FIXTURE_PLUGIN)),
+      await fs.stat(path.join(defaultEnvDir, 'node_modules', FIXTURE_PLUGIN)),
     ).toBeDefined();
   }, 300_000);
 
@@ -368,8 +379,8 @@ describe('a plugin installed only into the default `.rawbox` target folder', () 
     expect(await loadFrom([defaultWorkspaceDir])).toContain(FIXTURE_PLUGIN);
     expect(await loadFrom([repoRoot])).toContain(FIXTURE_PLUGIN);
 
-    // ...and resolves from `.rawbox/`, which is the only place it lives.
-    expect(await loadFrom([defaultTargetFolder])).toBeUndefined();
+    // ...and resolves from `.rawbox/envs/<hash>/`, which is the only place it lives.
+    expect(await loadFrom([defaultEnvDir])).toBeUndefined();
   });
 
   it('runs to completion from an unrelated cwd, using the default target folder', async () => {
@@ -400,5 +411,48 @@ describe('a plugin installed only into the default `.rawbox` target folder', () 
     await expect(
       fs.stat(path.join(defaultWorkspaceDir, 'data')),
     ).rejects.toThrow();
+  }, 120_000);
+});
+
+// ---------------------------------------------------------------------------
+// The workflow's env outranks the target folder's own `node_modules`
+//
+// A target folder may hold a stray copy of a package — hand-installed, or
+// left by an older layout — at another version than the one a workflow pins.
+// Its env is the only base that is authoritative, so it must be consulted
+// first. The stray copy here throws on import: a run that reached it would
+// fail, so a passing run proves the env copy won.
+// ---------------------------------------------------------------------------
+
+describe('plugin resolution precedence', () => {
+  const strayDir = path.join(targetDir, 'node_modules', FIXTURE_PLUGIN);
+
+  afterAll(async () => {
+    await fs.rm(strayDir, { recursive: true, force: true });
+  });
+
+  it('runs against the env copy even when `<targetFolder>/node_modules` holds another one', async () => {
+    await fs.mkdir(path.join(strayDir, 'dist'), { recursive: true });
+    await fs.writeFile(
+      path.join(strayDir, 'package.json'),
+      JSON.stringify({
+        name: FIXTURE_PLUGIN,
+        version: '0.0.0-stray',
+        type: 'module',
+        exports: { './contract-registry': './dist/contract-registry.js' },
+      }),
+    );
+    await fs.writeFile(
+      path.join(strayDir, 'dist', 'contract-registry.js'),
+      "throw new Error('stray copy in <targetFolder>/node_modules was loaded');\n",
+    );
+    expect(await loadFrom([targetDir])).toContain('stray copy');
+
+    const logFile = path.join(sandboxRoot, 'run-precedence.log');
+    const errorLogFile = path.join(sandboxRoot, 'run-precedence.error.log');
+    const result = await runWorkflowInstance(workspaceFile, workflowFile, logFile, errorLogFile);
+
+    expect(result.isOk(), result.isErr() ? result.error : '').toBe(true);
+    expect(await fs.readFile(logFile, 'utf-8')).toContain('"event":"run.end","outcome":"ok"');
   }, 120_000);
 });

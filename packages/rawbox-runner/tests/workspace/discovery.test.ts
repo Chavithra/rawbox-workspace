@@ -65,7 +65,7 @@ describe('discoverWorkspace', () => {
     // it must be skipped by `kind`, not merely by name.
     await fs.writeFile(
       path.join(workflowDir, 'other.yaml'),
-      'kind: Workflow\nformatVersion: "1.0"\nname: other\nplugins: {}\nstorage: {}\nsteps: []\n',
+      'kind: Workflow\nformatVersion: "1.0"\nname: other\ndependencies: {}\nstorage: {}\nsteps: []\n',
       'utf-8',
     );
     const workflowFile = path.join(workflowDir, 'workflow.yaml');
@@ -111,7 +111,7 @@ describe('discoverWorkspace', () => {
     const workflowFile = path.join(workflowDir, 'workflow.yaml');
     await fs.writeFile(
       workflowFile,
-      'kind: Workflow\nformatVersion: "1.0"\nname: w\nplugins: {}\nstorage: {}\nsteps: []\n',
+      'kind: Workflow\nformatVersion: "1.0"\nname: w\ndependencies: {}\nstorage: {}\nsteps: []\n',
       'utf-8',
     );
 
@@ -138,7 +138,7 @@ describe('discoverWorkspace', () => {
     const workflowFile = path.join(workflowDir, 'workflow.yaml');
     await fs.writeFile(
       workflowFile,
-      'kind: Workflow\nformatVersion: "1.0"\nname: w\nplugins: {}\nstorage: {}\nsteps: []\n',
+      'kind: Workflow\nformatVersion: "1.0"\nname: w\ndependencies: {}\nstorage: {}\nsteps: []\n',
       'utf-8',
     );
 

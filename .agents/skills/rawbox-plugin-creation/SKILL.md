@@ -235,5 +235,5 @@ To test your plugin locally in a Rawbox project workspace before publishing:
    ```bash
    npm link rawbox-plugin-custom
    ```
-3. Add the plugin dependency to your workspace's `package.json` manually or run `npm install --save-dev ./path-to-plugin`.
+3. Declare the plugin in the workflow's `dependencies:` with a `file:` specifier pointing at the plugin directory (relative paths resolve against the workspace directory); the run installs it into the workflow's env as a link.
 4. Ensure the plugin's `package.json` declares the `"rawbox-plugin"` keyword and exposes the `./contract-registry` subpath under `exports`, so the Runner discovers it correctly.

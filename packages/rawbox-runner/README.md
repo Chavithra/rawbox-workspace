@@ -66,8 +66,8 @@ workspace.
 ```yaml
 kind: Workspace
 name: data-processing-workspace
-# Optional. Where `workspace setup` installs plugins and where a run resolves
-# them from, relative to this file. Defaults to <this directory>/.rawbox.
+# Optional. Where `workspace setup` installs dependency envs and where a run
+# resolves plugins from, relative to this file. Defaults to <this directory>/.rawbox.
 # targetFolder: ./target
 workflowPathList:
   - ./workflows/throttle-ops.workflow.yaml
@@ -92,8 +92,10 @@ The install/resolution folder is picked by `resolveTargetFolder`, highest preced
 the `target-folder` CLI argument, then `targetFolder:` in this document (resolved against
 the workspace directory), then `<workspace directory>/.rawbox` — a gitignored, machine-owned
 folder that also holds the LMDB data directory the runner writes to. It is safe to delete:
-`workspace setup` and a run's auto-setup regenerate it. `rawbox.lock` deliberately stays
-outside it, next to `workspace.yaml`, because it is committed rather than ephemeral.
+`workspace setup` and a run's auto-setup regenerate it. Each distinct `dependencies:` map is
+installed into its own env, `<target folder>/envs/<hash>/`, and `<target folder>/package.json`
+is never touched. `rawbox.lock` deliberately stays outside it, next to `workspace.yaml`,
+because it is committed rather than ephemeral.
 
 ### 1.1. Implicit (workspace-less) workspaces
 
@@ -307,8 +309,9 @@ description: "Throttle a loop to a fixed rate."
 
 # Package name -> npm dependency specifier, exactly the shape of `dependencies`
 # in a package.json. A relative `file:` specifier resolves against the
-# workspace directory, not against this file.
-plugins:
+# workspace directory, not against this file. Each distinct map is installed
+# into its own env, so workflows may pin different specifiers of one package.
+dependencies:
   "@rawbox/rawbox-plugin-default": "^0.1.0"
 
 # A strategy describes a box, so it is declared once per key and never repeated
@@ -457,20 +460,25 @@ declares no byte model has its keys **named and excluded** from the totals rathe
 ## 3. `rawbox.lock`
 
 `npx rawbox-cli workflow lock <workflow>` resolves every declared package and writes
-`rawbox.lock` next to `workspace.yaml`. It is keyed by package name at the **workspace**
-level, so workflows sharing a plugin share one entry, and the workflow file is never
-modified.
+`rawbox.lock` next to `workspace.yaml`, resolving each package from the workflow's own env.
+It is keyed by package name, then by canonical specifier, at the **workspace** level:
+workflows declaring the same specifier share one entry, workflows pinning different
+specifiers of one package get one entry each, and the workflow file is never modified. A
+relative `file:` specifier is keyed slash-normalized but unresolved, so the committed lock
+matches on every machine.
 
 ```yaml
-version: "1"
-plugins:
+version: "2"
+dependencies:
   "@rawbox/rawbox-plugin-default":
-    resolved: "0.1.0"
-    registryHash: "92837f61c312…"
+    "^0.1.0":
+      resolved: "0.1.0"
+      registryHash: "92837f61c312…"
 ```
 
-An absent lock means "resolve whatever is installed". A present entry is enforced at load:
-a hash mismatch fails the run, naming the package and telling you to re-lock.
+An absent lock means "resolve whatever is installed". A present entry is enforced at load,
+matched by package name and canonical specifier: a hash mismatch fails the run, naming the
+package and telling you to re-lock.
 
 ---
 
@@ -595,7 +603,7 @@ and, in buffered mode, the tail of the stream unwritten.
 `console` when it has a host. It calls `emitRunEvent({ event: 'log', … })` from
 `@rawbox/plugin`, which hands the payload to whatever channel the host installed
 — an ambient, process-wide slot addressed by a `Symbol.for` key, so a plugin
-resolved from a workspace's `.rawbox/node_modules` reaches the same slot as the
+resolved from a workflow's env, `.rawbox/envs/<hash>/node_modules`, reaches the same slot as the
 runner. `runWorkflowInstance` installs a channel for the duration of a run and
 removes it afterwards.
 
@@ -894,9 +902,11 @@ const resolved = resolveWorkflow(
 
 | Export | Purpose |
 | --- | --- |
-| `setupWorkspace`, `loadAndValidateWorkspace`, `loadAndValidateWorkflows` | Workspace setup: splice every workflow's `plugins:` into a generated `package.json` and install. |
+| `setupWorkspace`, `loadAndValidateWorkspace`, `loadAndValidateWorkflows` | Workspace setup: install each distinct `dependencies:` map into its own env, `<targetFolder>/envs/<hash>/`, and prune envs no workflow references. |
+| `setupDependencyEnv` | The single-env install step `setupWorkspace` composes from — useful directly when the caller has one workflow's `dependencies:` map, as a run's auto-setup and workspace-less ("scratch") runs do. |
+| `normalizeDependencySpecifier`, `canonicalLockSpecifier`, `normalizeDependencyRecord`, `dependencyEnvHash`, `resolveDependencyEnvDir`, `groupDependencyEnvs`, `DependencyEnvGroup`, `DEPENDENCY_ENVS_DIRNAME`, `DEPENDENCY_ENV_READY_FILENAME`, `DEPENDENCY_ENV_SETUP_LOCK_FILENAME`, `DEPENDENCY_ENV_HASH_PATTERN` | Dependency envs (`dependency-env.ts`): specifier normalization, the portable `rawbox.lock` key, the env hash and directory, and grouping workflows by env. |
 | `resolveTargetFolder`, `RAWBOX_DOT_FOLDER`, `workspaceKindError` | Workspace document helpers. |
-| `lockWorkspacePlugins`, `readRawboxLock`, `writeRawboxLock`, `verifyRawboxLock`, `rawboxLockPath` | Lock file lifecycle. |
+| `lockWorkspacePlugins`, `readRawboxLock`, `writeRawboxLock`, `verifyRawboxLock`, `lookupRawboxLockEntry`, `rawboxLockPath` | Lock file lifecycle; entries are keyed by package name, then canonical specifier. |
 | `PluginDiscoverer`, `loadPluginContractRegistry`, `contractRegistrySpecifier` | Plugin discovery and registry import. |
 | `createWorkflowMachine`, `machineSetup` | The XState machine, for embedding the runner directly. |
 | `collectStorageBindingList`, `collectBoundStorageKeyList`, `collectBoundStorageKeys` | The one traversal behind both the storage-key rules (§2.3) and the budget's key sweep. |
@@ -906,7 +916,7 @@ const resolved = resolveWorkflow(
 | `createOtelSink`, `OTEL_ATTRIBUTE`, `OTEL_METRIC`, `RUN_SPAN_NAME` | The OpenTelemetry bridge (§6) and the `rawbox.*` names it writes. |
 | `parseConfig` | YAML/JSON document parsing. Returns `Result<unknown, string>` — an `Err` naming the file on malformed content, never a throw; validate the value. |
 | `Workflow`, `Workspace`, `Step`, `ResolvedWorkflow`, `ResolvedStep`, `RawboxLock`, `DOCUMENT_KIND`, `FORMAT_VERSION` | Schemas and constants. |
-| `WorkspaceSource`, `setupNpmPackage` | Workspace-less ("scratch") runs (§1.1): the `runWorkflowInstance` seam, and the bare install step `setupWorkspace` composes from — useful directly when the caller has a single workflow's `plugins:` map rather than a workspace document to merge. |
+| `WorkspaceSource` | Workspace-less ("scratch") runs (§1.1): the `runWorkflowInstance` seam. |
 
 ---
 

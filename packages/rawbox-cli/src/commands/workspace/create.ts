@@ -210,10 +210,11 @@ export function renderWorkspaceDocument(
       {
         path: ['workflowPathList'],
         before:
-          `Where \`workspace setup\` installs the declared plugins, and where a run\n` +
-          `resolves them from. Optional — it defaults to this directory, which is why\n` +
+          `Where \`workspace setup\` installs the declared plugins — one env per distinct\n` +
+          `\`dependencies:\` map, under envs/<hash>/ — and where a run resolves them\n` +
+          `from. Optional — it defaults to ./.rawbox, which is why\n` +
           `\`workspace setup ./workspace.yaml\` needs no second argument. Uncomment to\n` +
-          `keep the installed packages out of the workspace directory:\n` +
+          `put the installed packages somewhere else:\n` +
           `\n` +
           `  targetFolder: ./target\n` +
           `\n` +
@@ -225,9 +226,10 @@ export function renderWorkspaceDocument(
           `--\n` +
           `\n` +
           `The workflows that belong to this workspace, resolved relative to this\n` +
-          `file. \`workspace setup\` installs the plugins all of them declare into one\n` +
-          `target folder, and the \`rawbox.lock\` written beside this file records what\n` +
-          `each package resolved to — one entry per package, shared by every workflow.\n` +
+          `file. \`workspace setup\` installs each distinct \`dependencies:\` map they\n` +
+          `declare into its own env, .rawbox/envs/<hash>/, so two workflows may pin\n` +
+          `different versions of one package. The \`rawbox.lock\` written beside this\n` +
+          `file records what each package and specifier resolved to.\n` +
           `\n` +
           `--\n` +
           `\n` +
@@ -267,7 +269,7 @@ interface WorkflowExampleOptions {
   name: string;
   /** Path as it appears in `workflowPathList`, used in the header's commands. */
   relativePath: string;
-  /** Package name declared in `plugins:`. */
+  /** Package name declared in `dependencies:`. */
   pluginPackage: string;
   /** npm dependency specifier for that package. */
   pluginSpecifier: string;
@@ -296,7 +298,7 @@ export function renderDefaultWorkflowDocument(
       name,
       description:
         'Scaffolded example: a launch countdown — five T-minus ticks, then liftoff.',
-      plugins: { [pluginPackage]: pluginSpecifier },
+      dependencies: { [pluginPackage]: pluginSpecifier },
       storage: {
         defaultStrategy: { ...DEFAULT_STORAGE_STRATEGY },
         keys: {
@@ -370,9 +372,9 @@ export function renderDefaultWorkflowDocument(
       `right, so verify early rather than at the end.`,
     [
       {
-        path: ['plugins'],
+        path: ['dependencies'],
         before:
-          `The plugins this workflow uses: package name -> npm dependency specifier,\n` +
+          `The dependencies this workflow uses: package name -> npm dependency specifier,\n` +
           `exactly the shape of \`dependencies\` in a package.json. The specifier\n` +
           `carries the source, so there is no separate source or path field:\n` +
           `\n` +
@@ -386,7 +388,7 @@ export function renderDefaultWorkflowDocument(
           `generated \`rawbox.lock\` beside workspace.yaml, so this file stays pure\n` +
           `"name: range" and is never rewritten under you.`,
       },
-      { path: ['plugins', pluginPackage], quote: true },
+      { path: ['dependencies', pluginPackage], quote: true },
       {
         path: ['storage'],
         before:
@@ -462,7 +464,7 @@ export function renderDefaultWorkflowDocument(
         path: ['steps'],
         before:
           `Steps run top to bottom until a control-flow step redirects or the list\n` +
-          `ends. \`plugin:\` is a key of \`plugins:\` above, matched exactly;\n` +
+          `ends. \`plugin:\` is a key of \`dependencies:\` above, matched exactly;\n` +
           `\`operation:\` is the contract path inside that plugin, so \`time/sleep\`\n` +
           `addresses "./time/sleep.definition.js" in its contract registry.\n` +
           `\n` +
@@ -698,9 +700,9 @@ export function registryUrlError(rawUrl: string): string | undefined {
  * Everything emitted is YAML. The default plugin is always declared with the
  * published registry range (`DEFAULT_PLUGIN_RANGE`), never a `file:`
  * specifier — including when the workspace is scaffolded inside this
- * monorepo, where `workspace setup`/a run's auto-setup still resolves it with
- * no install and no registry contact, by walking up to the hoisted sibling
- * package (see CONTRIBUTING.md).
+ * monorepo. The first run's auto-setup installs that range into
+ * `.rawbox/envs/<hash>/` from the registry the workspace's `.npmrc` names
+ * (`--registry`), or from the ambient one.
  */
 export async function createWorkspace(options: {
   name?: string | undefined;
@@ -780,8 +782,8 @@ export async function createWorkspace(options: {
     await fs.writeFile(path.join(targetDir, '.gitignore'), WORKSPACE_GITIGNORE, 'utf-8');
 
     // Beside workspace.yaml, so `workspace setup` finds it in the workspace
-    // directory and copies it into the target folder before every install —
-    // see setupNpmPackage in @rawbox/runner.
+    // directory and copies it into each dependency env before every install —
+    // see setupDependencyEnv in @rawbox/runner.
     if (registryUrl !== undefined) {
       await fs.writeFile(
         path.join(targetDir, '.npmrc'),
@@ -791,8 +793,8 @@ export async function createWorkspace(options: {
     }
 
     // Always the published registry range — never a `file:` specifier, even
-    // inside this monorepo. Auto-setup resolves it there with no install by
-    // walking up to the hoisted sibling package (CONTRIBUTING.md).
+    // inside this monorepo: the scaffold must mean the same thing wherever it
+    // is copied to.
     const pluginSpecifier = DEFAULT_PLUGIN_RANGE;
     const pluginLoadable = await isPluginRegistryLoadable(DEFAULT_PLUGIN_PACKAGE, [
       targetDir,
@@ -811,7 +813,7 @@ export async function createWorkspace(options: {
 
       // Always the runnable example — never an empty stub. A fresh consumer
       // has no `@rawbox/rawbox-plugin-default` installed, and does not need
-      // one: the first run's auto-setup installs it.
+      // one: the first run's auto-setup installs it into the workflow's env.
       const content = renderDefaultWorkflowDocument({
         name: target.name,
         relativePath: target.relativePath,

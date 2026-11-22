@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ContractRegistryCache } from '@rawbox/plugin/core';
 import { PluginDiscoverer } from '../../src/workflow/plugin-discoverer.js';
+import { resolveDependencyEnvDir } from '../../src/workflow/dependency-env.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -335,6 +336,28 @@ describe('PluginDiscoverer resolution fallback (resolveFrom)', () => {
     expect(result.isOk()).toBe(true);
     const registry = cache.getContractRegistry(result._unsafeUnwrap());
     expect(registry?.contractRecord).toHaveProperty('from-base-b');
+  });
+
+  it('prefers the env copy at `<targetFolder>/envs/<hash>/node_modules` over `<targetFolder>/node_modules`', async () => {
+    // The base order `runWorkflowInstance` uses: the workflow's env first,
+    // then its target folder. The env sits *inside* the target folder, so
+    // Node's upward walk from it would reach the target's copy too — what
+    // matters is that the env's own `node_modules` is checked first.
+    const pluginName = 'rawbox-plugin-resolve-env-first';
+    const targetFolder = path.join(root, 'env-precedence-target');
+    const envDir = resolveDependencyEnvDir(targetFolder, { [pluginName]: '^2.0.0' }) as string;
+    expect(envDir).toBe(path.join(targetFolder, 'envs', path.basename(envDir)));
+    await writeFakeRegistryPackage(envDir, pluginName, 'from-env');
+    await writeFakeRegistryPackage(targetFolder, pluginName, 'from-target-node-modules');
+
+    const cache = new ContractRegistryCache();
+    const result = await PluginDiscoverer.loadPlugin(pluginName, cache, {
+      resolveFrom: [envDir, targetFolder],
+    });
+
+    const registry = cache.getContractRegistry(result._unsafeUnwrap());
+    expect(registry?.contractRecord).toHaveProperty('from-env');
+    expect(registry?.contractRecord).not.toHaveProperty('from-target-node-modules');
   });
 
   it('falls back to the bare specifier when no supplied base can resolve it', async () => {

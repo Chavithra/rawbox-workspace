@@ -31,9 +31,18 @@ npx rawbox-cli run workspaces/my-workspace/workflows/example.workflow.yaml
 ```
 
 The generated workflow declares the published range (`"@rawbox/rawbox-plugin-default":
-"^0.1.0"`), yet no registry is ever contacted here: plugin resolution walks up from the
-workspace directory into the repo root's hoisted symlinks, finds the sibling packages,
-and auto-setup installs nothing. The edit loop is therefore:
+"^0.1.0"`). Auto-setup installs that map into the workflow's own env,
+`<target folder>/envs/<hash>/`, and never counts on the repo root's hoisted symlinks, so
+the first run asks the npm registry for it. Inside the clone, point the workflow at the
+local package with a `file:` specifier instead (a relative path resolves against the
+workspace directory):
+
+```yaml
+dependencies:
+  "@rawbox/rawbox-plugin-default": "file:../../packages/rawbox-plugin-default"
+```
+
+npm links a `file:` directory, so after the first run's install the edit loop is live:
 
 ```bash
 # edit packages/rawbox-plugin-default/src/…
@@ -87,8 +96,8 @@ npx rawbox-cli project create --name consumer-check --registry http://localhost:
 ```
 
 `project create` / `workspace create` `--registry <url>` writes that scoped `.npmrc`
-into the scaffold, and `workspace setup` propagates it into the workspace's target
-folder, so every install rawbox performs honours it. Scoped config keeps third-party
+into the scaffold, and `workspace setup` copies it into each dependency env
+under the workspace's target folder, so every install rawbox performs honours it. Scoped config keeps third-party
 packages coming from npmjs.
 
 **Registry hygiene:** the packages, the internal ranges, and the scaffold templates'
@@ -138,7 +147,7 @@ resolve an ancient artifact that satisfies the range.
 > npm install --prefer-online
 > ```
 >
-> A workspace's `.rawbox/` target folder holds its own install; re-run
+> A workspace's `.rawbox/envs/<hash>/` directories hold its own installs; re-run
 > `rawbox-cli workspace setup <workspace file>` afterwards.
 
 ## 5. Consuming the clone from an external project
@@ -154,7 +163,7 @@ unlike `npm link` the entry lives in `package.json`, so it survives every future
 }
 ```
 
-Workflow `plugins:` specifiers compose the same way (relative `file:` resolves against
+Workflow `dependencies:` specifiers compose the same way (relative `file:` resolves against
 the workspace directory). `npm link` also works for quick experiments — but any later
 `npm install` re-resolves from the registry and silently replaces the links, so the
 discipline is: install first, link second, re-link after every install.
@@ -166,12 +175,12 @@ Two sharp edges to know:
   registry that may not have it. Link (the default), or use the "Testing what a consumer gets" rehearsal.
 - **"Works in the clone" does not prove "works anywhere else."** Plugin resolution's
   bare-specifier fallback resolves a plugin as a sibling of `@rawbox/runner` itself, so
-  inside this repo a plugin the workspace never installed still resolves. The "Testing what a consumer gets"
+  inside this repo a plugin the workspace never installed can still resolve at load time. The "Testing what a consumer gets"
   rehearsal is the check that catches this class of mistake.
 
 ## 6. Locks and contract hashes during development
 
-`rawbox.lock` pins each plugin's contract-registry hash, enforced on the execution
+`rawbox.lock` (package name, then specifier) pins each plugin's contract-registry hash, enforced on the execution
 path, and every rebuild that changes a contract changes the hash. So: don't lock while
 iterating on contracts (an absent lock means "resolve whatever is installed" — the
 development posture); lock at stopping points — before sharing a workspace, in CI, at

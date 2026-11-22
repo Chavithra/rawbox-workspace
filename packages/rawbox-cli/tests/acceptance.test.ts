@@ -4,6 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as p from '@clack/prompts';
 
+import { resolveDependencyEnvDir } from '@rawbox/runner';
+
 import { createWorkspace } from '../src/commands/workspace/create.js';
 import { runWorkflowCommand } from '../src/commands/workflow/run.js';
 
@@ -23,16 +25,13 @@ import { runWorkflowCommand } from '../src/commands/workflow/run.js';
 // discovery, auto-setup, execution, logging and terminal rendering, all from
 // one call to `run`.
 //
-// **What this does not prove**, for the same reason `e2e.test.ts` documents:
-// the scaffolded workflow declares `@rawbox/rawbox-plugin-default`, which
-// resolves from this monorepo's own hoisted `node_modules` by walking up
-// from the workspace directory, regardless of whether anything was ever
-// installed into `.rawbox/`. So the plugin specifier is left exactly as
-// `workspace create` always emits it — the published registry range
-// (`^0.1.0`), never a `file:` one, even here inside the monorepo — and this
-// suite asserts the *run* succeeds with zero prior setup — never that an
-// install happened. It cannot: there is nothing here for auto-setup to
-// install, so no `node_modules/` assertion appears below.
+// **One substitution**, the same one `e2e.test.ts` makes: the scaffold emits
+// the published registry range (`^0.1.0`) for `@rawbox/rawbox-plugin-default`,
+// and the package is not published. The first run's auto-setup installs the
+// workflow's env from its specifier — it does not settle for the hoisted copy
+// the name also resolves to here — so the specifier is rewritten to an
+// absolute `file:` one pointing at the real built plugin, standing in for a
+// registry install. Nothing else in the generated document is touched.
 // ---------------------------------------------------------------------------
 
 /**
@@ -53,7 +52,11 @@ function isSegmentZeroLogFile(entry: string): boolean {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const tempDir = path.join(__dirname, 'temp-acceptance');
+
+const PLUGIN_PACKAGE = '@rawbox/rawbox-plugin-default';
+const PLUGIN_DIR = path.join(repoRoot, 'packages', 'rawbox-plugin-default');
 const originalCwd = process.cwd();
 
 const WORKSPACE_NAME = 'acceptance-ws';
@@ -95,6 +98,14 @@ beforeAll(async () => {
   process.chdir(tempDir);
   await createWorkspace({ name: WORKSPACE_NAME });
   process.chdir(originalCwd);
+
+  const generated = await fs.readFile(workflowFile, 'utf-8');
+  const rewritten = generated.replace(
+    `"${PLUGIN_PACKAGE}": "^0.1.0"`,
+    `"${PLUGIN_PACKAGE}": "file:${PLUGIN_DIR}"`,
+  );
+  expect(rewritten, 'scaffolded specifier was not in the expected form').not.toBe(generated);
+  await fs.writeFile(workflowFile, rewritten, 'utf-8');
 }, 60_000);
 
 afterAll(async () => {
@@ -165,7 +176,7 @@ describe('acceptance — run <workflow.yaml> as the ONLY workflow command', () =
     expect(text).toContain(workspaceFile);
   });
 
-  it('creates .rawbox/ next to workspace.yaml, containing logs/', async () => {
+  it('creates .rawbox/ next to workspace.yaml, containing logs/ and the auto-installed env', async () => {
     const rawboxDir = path.join(workspaceDir, '.rawbox');
     const rawboxStat = await fs.stat(rawboxDir);
     expect(rawboxStat.isDirectory()).toBe(true);
@@ -174,11 +185,15 @@ describe('acceptance — run <workflow.yaml> as the ONLY workflow command', () =
     const logsStat = await fs.stat(logsDir);
     expect(logsStat.isDirectory()).toBe(true);
 
-    // No assertion on `node_modules/` here, deliberately — see the file
-    // header. The declared plugin resolves from this monorepo's own hoisted
-    // `node_modules`, so nothing here needed installing and auto-setup never
-    // ran; asserting its absence would be just as meaningless as asserting
-    // its presence; asserting nothing is the honest option.
+    const envDir = resolveDependencyEnvDir(
+      rawboxDir,
+      { [PLUGIN_PACKAGE]: `file:${PLUGIN_DIR}` },
+      workspaceDir,
+    ) as string;
+    await expect(
+      fs.stat(path.join(envDir, 'node_modules', PLUGIN_PACKAGE, 'package.json')),
+    ).resolves.toBeDefined();
+    expect(stripAnsi(messageList.join('\n'))).toContain('Auto-setup');
   });
 
   it('prints recap-style output in pretty mode', () => {

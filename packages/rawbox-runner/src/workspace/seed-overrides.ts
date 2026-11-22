@@ -158,7 +158,7 @@ export type SeedOverrideRecord = Static<typeof SeedOverrideRecord>;
  *
  * A `Type.Record` of records, not a `StrictObject`: both levels of key are the
  * author's own strings — a `workflowPathList` entry and their own storage keys
- * — exactly as `plugins:`, `backends:` and `storage.keys` are (see
+ * — exactly as `dependencies:`, `backends:` and `storage.keys` are (see
  * `StrictObject`'s note on why it deliberately does not reach records). The
  * outer key is checked by {@link collectSeedOverridePathProblems} rather than
  * by the schema, because "is this one of the paths this document lists" is a

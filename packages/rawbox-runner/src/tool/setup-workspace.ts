@@ -1,12 +1,24 @@
+import type { Dirent } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { Compile } from 'typebox/compile';
 import { ok, err, type Result } from 'neverthrow';
 
 import { Workspace, resolveTargetFolder, workspaceKindError } from '../workspace/workspace-types.js';
 import { resolveWorkspaceWorkflowPath } from '../workspace/workflow-path.js';
-import { type Workflow, type PluginSpecifierRecord } from '../workflow/workflow-types.js';
+import { type Workflow, type DependencySpecifierRecord } from '../workflow/workflow-types.js';
+import {
+  DEPENDENCY_ENVS_DIRNAME,
+  DEPENDENCY_ENV_HASH_PATTERN,
+  DEPENDENCY_ENV_READY_FILENAME,
+  DEPENDENCY_ENV_SETUP_LOCK_FILENAME,
+  groupDependencyEnvs,
+  normalizeDependencyRecord,
+  resolveDependencyEnvDir,
+  type DependencyEnvGroup,
+} from '../workflow/dependency-env.js';
 import { formatValidationErrors, validateWorkflowType } from '../workflow/validation.js';
 import { parseConfig } from '../utils/config.js';
 import { getErrorMessage } from '../utils/error.js';
@@ -14,8 +26,17 @@ import { getErrorMessage } from '../utils/error.js';
 
 const workspaceValidator = Compile(Workspace);
 
-/** Prefix identifying an npm `file:` dependency specifier. */
-const FILE_SPEC_PREFIX = 'file:';
+const execFileAsync = promisify(execFile);
+
+/** Env installs `setupWorkspace` runs at once when `SetupOptions.concurrency` is unset. */
+const DEFAULT_SETUP_CONCURRENCY = 2;
+
+/**
+ * Upper bound on the output buffered from one `npm install`. Only stderr is
+ * ever read, but `execFile` buffers both streams and kills the child when
+ * either overflows, so the bound has to be generous rather than tight.
+ */
+const NPM_INSTALL_MAX_BUFFER = 64 * 1024 * 1024;
 
 /**
  * Why `--install-links` fails more often than it looks like it should.
@@ -42,38 +63,6 @@ const INSTALL_LINKS_HINT =
   `succeed while leaving the peer absent, so the copied plugin fails later with ` +
   `"Cannot find package" at the moment it is imported. An install-time 404 is the better ` +
   `of the two failures.`;
-
-/**
- * Rewrites a relative `file:` specifier to an absolute one, resolved against
- * `workspaceDir` — the directory containing the workspace file.
- *
- * npm resolves a relative `file:` specifier against the *generated* target
- * `package.json`, not the workflow file that declared it, so splicing
- * `plugins:` verbatim would silently break relative local paths. Absolute
- * `file:` specs and every other specifier form (registry ranges, `git+...`,
- * etc.) pass through untouched.
- */
-function normalizePluginSpecifier(specifier: string, workspaceDir: string): string {
-  if (!specifier.startsWith(FILE_SPEC_PREFIX)) {
-    return specifier;
-  }
-
-  const target = specifier.slice(FILE_SPEC_PREFIX.length);
-  if (path.isAbsolute(target)) {
-    return specifier;
-  }
-
-  return `${FILE_SPEC_PREFIX}${path.resolve(workspaceDir, target)}`;
-}
-
-/** Applies {@link normalizePluginSpecifier} to every entry of a `plugins:` map. */
-function normalizePlugins(plugins: PluginSpecifierRecord, workspaceDir: string): PluginSpecifierRecord {
-  const normalized: PluginSpecifierRecord = {};
-  for (const [name, specifier] of Object.entries(plugins)) {
-    normalized[name] = normalizePluginSpecifier(specifier, workspaceDir);
-  }
-  return normalized;
-}
 
 export async function loadAndValidateWorkspace(workspacePath: string): Promise<Result<Workspace, string>> {
   const absoluteWorkspacePath = path.resolve(workspacePath);
@@ -149,9 +138,9 @@ export async function resolveWorkspaceTargetFolder(
  * workspace's `workflowPathList` — it was loaded from.
  *
  * The path travels with the workflow (rather than being re-derived later)
- * because {@link mergeWorkflowPlugins} needs it to name *which* workflow
- * declared a conflicting specifier, and by the time it runs the workflow
- * object alone no longer carries that information.
+ * because {@link setupWorkspace} needs it to name *which* workflows use an env
+ * whose install failed, and by then the workflow object alone no longer
+ * carries that information.
  */
 export interface LoadedWorkflow {
   /** As declared in `workspace.workflowPathList`, e.g. `./workflows/a.workflow.yaml`. */
@@ -200,245 +189,271 @@ export async function loadAndValidateWorkflows(workspacePath: string, workspace:
   return ok(workflows);
 }
 
-/**
- * Merges every workflow's `plugins:` map into one, the way `setupNpmPackage`
- * needs it — but fails closed when two workflows declare the *same* package
- * name with *different* specifier strings.
- *
- * The comparison is plain string inequality, not semver-range intersection:
- * `"^1.0.0"` and `"^1.2.0"` are flagged as conflicting even though a real
- * resolver could satisfy both, because deciding that correctly means
- * re-implementing npm's own resolution logic. The cost of a false positive
- * (two workflows told to align specifiers that could technically coexist) is
- * a rewrite of one line in a workflow document; the cost of a false negative
- * is exactly the silent-merge bug this function exists to prevent — a later
- * workflow winning over an earlier one with nothing said about it.
- *
- * All conflicting packages are collected and reported together in a single
- * error, so a workspace with several disagreeing workflows doesn't have to be
- * fixed and re-run one package at a time.
- */
-export function mergeWorkflowPlugins(loadedWorkflows: LoadedWorkflow[]): Result<PluginSpecifierRecord, string> {
-  // package name -> specifier -> path of the first workflow that declared it
-  const specifiersByPackage = new Map<string, Map<string, string>>();
-
-  for (const { path: workflowPath, workflow } of loadedWorkflows) {
-    for (const [name, specifier] of Object.entries(workflow.plugins)) {
-      let specifiers = specifiersByPackage.get(name);
-      if (specifiers === undefined) {
-        specifiers = new Map();
-        specifiersByPackage.set(name, specifiers);
-      }
-      // Distinct specifier strings only: a package re-declared with the exact
-      // same specifier by a second workflow is the common, harmless case and
-      // must merge silently, not be recorded as a second candidate.
-      if (!specifiers.has(specifier)) {
-        specifiers.set(specifier, workflowPath);
-      }
-    }
-  }
-
-  const merged: PluginSpecifierRecord = {};
-  const conflictLines: string[] = [];
-
-  for (const [name, specifiers] of specifiersByPackage) {
-    const [firstSpecifier] = specifiers.keys();
-    if (specifiers.size === 1) {
-      merged[name] = firstSpecifier!;
-      continue;
-    }
-
-    const rendered = [...specifiers.entries()]
-      .map(([specifier, workflowPath]) => `"${specifier}" (${workflowPath})`)
-      .join(' vs ');
-    conflictLines.push(`Conflicting specifiers for "${name}": ${rendered}.`);
-  }
-
-  if (conflictLines.length > 0) {
-    return err(
-      `${conflictLines.join('\n')}\n\n` +
-        `Workflows in one workspace share one install; align the specifiers or split the workspaces.`,
-    );
-  }
-
-  return ok(merged);
-}
-
-/** Shape of the parts of a target `package.json` this module preserves. */
-interface TargetPackageJson extends Record<string, unknown> {
-  dependencies?: Record<string, string>;
-}
-
-/**
- * Reads the target folder's existing `package.json`, or `{}` when there is
- * none.
- *
- * An unparseable manifest is also treated as absent rather than as an error:
- * the alternative is refusing to set up a workspace because of a stray file,
- * and npm would have rejected it on the next line anyway with a better message.
- */
-async function readExistingPackageJson(
-  packageJsonPath: string,
-): Promise<TargetPackageJson> {
-  try {
-    const parsed: unknown = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as TargetPackageJson)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-/** Knobs shared by `setupNpmPackage` and `setupWorkspace`. */
+/** Knobs shared by `setupDependencyEnv` and `setupWorkspace`. */
 export interface SetupOptions {
   /**
    * Pass `--install-links` to `npm install`.
    *
    * npm treats a `file:` dependency as a **link**: it symlinks the package and
-   * does not install that package's own dependencies into the target, so the
-   * target holds the symlink and nothing else. That is the default here on
-   * purpose — a symlinked plugin keeps the local development loop live, since
-   * editing and rebuilding the plugin is picked up by the next run with no
-   * second `workspace setup`.
+   * does not install that package's own dependencies into the env, so the env
+   * holds the symlink and nothing else. That is the default here on purpose —
+   * a symlinked plugin keeps the local development loop live, since editing
+   * and rebuilding the plugin is picked up by the next run with no second
+   * `workspace setup`.
    *
    * `--install-links` makes npm *copy* the package and install its transitive
-   * dependencies, producing a target that is self-contained and portable at the
+   * dependencies, producing an env that is self-contained and portable at the
    * cost of being a snapshot: further edits to the plugin are invisible until
    * setup is run again. Opt in when the target folder is going to be moved to a
    * machine that has not installed the plugin independently.
    */
   installLinks?: boolean | undefined;
+  /**
+   * `setupWorkspace` only: after every install succeeded, delete each
+   * `envs/<16-hex>/` directory no workflow of the workspace references.
+   * Defaults to `true`.
+   *
+   * An env holding `.rawbox-setup.lock` is skipped, since some process is
+   * installing into it right now. Nothing else is checked — in particular not
+   * whether a running daemon still resolves from an unreferenced env, because
+   * the run registry belongs to `@rawbox/cli`. That is acceptable because only
+   * an explicit `workspace setup` prunes, never a run's auto-setup.
+   */
+  pruneStaleEnvs?: boolean | undefined;
+  /**
+   * `setupWorkspace` only: how many env installs may run at once. Defaults
+   * to 2 — enough to overlap one install's network wait with another's
+   * linking, without several npm processes contending for one tarball cache.
+   */
+  concurrency?: number | undefined;
+  /**
+   * `setupWorkspace` only: wraps each env's install, so a caller can hold a
+   * per-env lock around it. The runner has no lock implementation of its own
+   * — `@rawbox/cli` already has one with pid-probing stale recovery, and the
+   * same lock must serialize `workspace setup` against `run`'s auto-setup.
+   */
+  withEnvLock?: (<T>(envDir: string, fn: () => Promise<T>) => Promise<T>) | undefined;
+}
+
+/** What `.rawbox-env-ready.json` records about a finished install. */
+interface DependencyEnvReadyMarker {
+  hash: string;
+  dependencies: Record<string, string>;
+  installLinks: boolean;
+  installedAt: string;
 }
 
 /**
- * Initializes a new npm package in the target directory and installs the declared plugins.
+ * Installs one dependency set into its own env, `<targetFolder>/envs/<hash>/`,
+ * and returns that directory — or `ok(undefined)` for an empty set, without
+ * creating anything or running npm.
  *
- * `plugins` is spliced directly into the generated `package.json`'s
- * `dependencies` — the same shape npm already understands — and a single
- * `npm install` resolves registry, `file:`, and `git+...` specifiers alike.
- * There is no per-plugin loop or local-directory probe: npm performs
- * resolution instead of us.
+ * The env is a complete npm project of its own: a generated `package.json`
+ * holding exactly this set's normalized specifiers, and a copy of the
+ * workspace's `.npmrc`. `npm install` then resolves registry, `file:` and
+ * `git+...` specifiers alike, with no per-plugin loop or local-directory
+ * probe: npm performs resolution instead of us.
+ *
+ * `<targetFolder>/package.json` is never read or written. A declared
+ * `targetFolder:` can point anywhere, including at a directory an author
+ * already made an npm package of, and only the env directory is rawbox's.
+ *
+ * The ready marker is removed before npm runs and written only after it
+ * succeeded, so an interrupted or failed install never leaves an env that
+ * looks finished.
  */
-export async function setupNpmPackage(
+export async function setupDependencyEnv(
   targetFolder: string,
-  plugins: PluginSpecifierRecord,
+  dependencies: DependencySpecifierRecord,
   workspaceDir: string,
   options: SetupOptions = {},
-): Promise<Result<void, string>> {
-  const absoluteTargetFolder = path.resolve(targetFolder);
+): Promise<Result<string | undefined, string>> {
+  const envDir = resolveDependencyEnvDir(targetFolder, dependencies, workspaceDir);
+  if (envDir === undefined) {
+    return ok(undefined);
+  }
+  const hash = path.basename(envDir);
+  const normalizedDependencies = normalizeDependencyRecord(dependencies, workspaceDir);
+  const readyMarkerPath = path.join(envDir, DEPENDENCY_ENV_READY_FILENAME);
 
   try {
-    await fs.mkdir(absoluteTargetFolder, { recursive: true });
+    await fs.mkdir(envDir, { recursive: true });
+    await fs.rm(readyMarkerPath, { force: true });
 
-    const normalizedPlugins = normalizePlugins(plugins, workspaceDir);
-
-    // Write a local package.json to prevent npm from climbing up the monorepo
-    // directory tree.
-    //
-    // An existing manifest is *merged into*, not replaced: a declared
-    // `targetFolder:` can point anywhere, including a directory an author
-    // already made an npm package of, and overwriting their `scripts` or
-    // `devDependencies` because they ran `workspace setup` would be
-    // indefensible. Only `dependencies` is authoritative here.
-    const packageJsonPath = path.join(absoluteTargetFolder, 'package.json');
-    const existing = await readExistingPackageJson(packageJsonPath);
+    // The env's own `package.json` makes it an npm project root, so npm never
+    // climbs up into the target folder or the monorepo above it.
     await fs.writeFile(
-      packageJsonPath,
-      JSON.stringify(
+      path.join(envDir, 'package.json'),
+      `${JSON.stringify(
         {
-          name: path.basename(absoluteTargetFolder).toLowerCase().replace(/[^a-z0-9-_]/g, ''),
+          name: `rawbox-env-${hash}`,
           version: '1.0.0',
           type: 'module',
-          ...existing,
-          dependencies: { ...existing.dependencies, ...normalizedPlugins },
+          private: true,
+          dependencies: normalizedDependencies,
         },
         null,
         2,
-      ),
+      )}\n`,
     );
 
-    // Propagate the workspace's `.npmrc` into the target folder before npm
-    // runs. The generated package.json above makes the target folder its own
-    // npm project root, so npm will not walk up to the workspace's `.npmrc`;
-    // this copy is what makes a scaffolded registry (`project create` /
-    // `workspace create --registry`) govern every install rawbox performs —
-    // it is the one piece of real plumbing the flag needs. The workspace's
-    // file is authoritative: it is copied byte-for-byte on every setup,
-    // overwriting any earlier copy.
-    const workspaceNpmrcPath = path.join(path.resolve(workspaceDir), '.npmrc');
-    const targetNpmrcPath = path.join(absoluteTargetFolder, '.npmrc');
-    if (workspaceNpmrcPath !== targetNpmrcPath) {
-      try {
-        await fs.copyFile(workspaceNpmrcPath, targetNpmrcPath);
-      } catch (e) {
-        if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw e;
-        }
-        // No workspace `.npmrc` — ambient npm configuration applies, as before.
+    // Propagate the workspace's `.npmrc` into the env before npm runs. The
+    // env is its own npm project root, so npm will not walk up to the
+    // workspace's `.npmrc`; this copy is what makes a scaffolded registry
+    // (`project create` / `workspace create --registry`) govern every install
+    // rawbox performs. The workspace's file is authoritative: it is copied
+    // byte-for-byte on every setup, overwriting any earlier copy.
+    try {
+      await fs.copyFile(path.join(path.resolve(workspaceDir), '.npmrc'), path.join(envDir, '.npmrc'));
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw e;
       }
-    }
-
-    if (Object.keys(normalizedPlugins).length === 0) {
-      return ok(undefined);
+      // No workspace `.npmrc` — ambient npm configuration applies.
     }
 
     // `--install-links` turns npm's `file:` *link* into a copy-and-install; see
     // {@link SetupOptions.installLinks} for why linking stays the default.
-    const command = options.installLinks
-      ? 'npm install --install-links'
-      : 'npm install';
+    const args = options.installLinks ? ['install', '--install-links'] : ['install'];
+    const command = `npm ${args.join(' ')}`;
 
     try {
-      // stderr is captured rather than discarded: npm's own message is the only
-      // thing that explains *why* an install failed, and swallowing it left the
-      // caller with a bare "Command failed: npm install" naming no cause.
-      execSync(command, {
-        cwd: absoluteTargetFolder,
-        stdio: ['ignore', 'ignore', 'pipe'],
+      // Asynchronous so `setupWorkspace`'s bounded concurrency really runs
+      // installs side by side. stderr is captured rather than discarded:
+      // npm's own message is the only thing that explains *why* an install
+      // failed, and swallowing it left the caller with a bare "Command
+      // failed: npm install" naming no cause.
+      await execFileAsync('npm', args, {
+        cwd: envDir,
         encoding: 'utf-8',
+        maxBuffer: NPM_INSTALL_MAX_BUFFER,
+        shell: process.platform === 'win32',
       });
     } catch (e) {
       const npmOutput = (e as { stderr?: string }).stderr?.trim();
       return err(
-        `Failed to install the workspace's plugins into "${absoluteTargetFolder}" ` +
-          `with \`${command}\`.` +
+        `Failed to install dependencies into "${envDir}" with \`${command}\`.` +
           (npmOutput ? `\n\nnpm reported:\n${npmOutput}` : '') +
           (options.installLinks ? `\n\n${INSTALL_LINKS_HINT}` : ''),
       );
     }
 
-    return ok(undefined);
+    const marker: DependencyEnvReadyMarker = {
+      hash,
+      dependencies: normalizedDependencies,
+      installLinks: options.installLinks === true,
+      installedAt: new Date().toISOString(),
+    };
+    await fs.writeFile(readyMarkerPath, `${JSON.stringify(marker, null, 2)}\n`);
+
+    return ok(envDir);
   } catch (e) {
-    return err(`Failed to setup target npm package directory: ${getErrorMessage(e)}`);
+    return err(`Failed to set up dependency env "${envDir}": ${getErrorMessage(e)}`);
   }
 }
 
+/** What {@link setupWorkspace} set up. */
+export interface SetupWorkspaceResult {
+  /** The absolute target folder the envs live under. */
+  readonly targetFolder: string;
+  /** Every env the workspace's workflows need, in first-declared order. */
+  readonly envs: DependencyEnvGroup[];
+  /** Absolute paths of unreferenced envs that were deleted. */
+  readonly prunedEnvs: string[];
+}
+
 /**
- * Loads and validates a workspace, merges every workflow's `plugins:` map via
- * {@link mergeWorkflowPlugins}, and installs the result into the workspace's
- * target folder.
+ * Runs `task` over `items` with at most `limit` in flight, collecting every
+ * result in input order. Never rejects for a task's sake: tasks report
+ * failure through their own `Result`.
+ */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await task(items[index] as T);
+    }
+  };
+
+  const workerCount = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  return results;
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  return fs.access(target).then(
+    () => true,
+    () => false,
+  );
+}
+
+/**
+ * Deletes every `<targetFolder>/envs/<16-hex>/` directory whose hash is not in
+ * `keepHashes` and that holds no setup lock. Entries that do not look like an
+ * env are left alone: the folder is rawbox's, but nothing proves a stray file
+ * in it is.
+ */
+async function pruneStaleDependencyEnvs(
+  targetFolder: string,
+  keepHashes: ReadonlySet<string>,
+): Promise<string[]> {
+  const envsDir = path.join(targetFolder, DEPENDENCY_ENVS_DIRNAME);
+
+  let entries: Dirent[];
+  try {
+    entries = await fs.readdir(envsDir, { withFileTypes: true });
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw e;
+  }
+
+  const pruned: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !DEPENDENCY_ENV_HASH_PATTERN.test(entry.name)) continue;
+    if (keepHashes.has(entry.name)) continue;
+
+    const envDir = path.join(envsDir, entry.name);
+    if (await pathExists(path.join(envDir, DEPENDENCY_ENV_SETUP_LOCK_FILENAME))) continue;
+
+    await fs.rm(envDir, { recursive: true, force: true });
+    pruned.push(envDir);
+  }
+  return pruned;
+}
+
+/**
+ * Loads and validates a workspace, groups its workflows by dependency set via
+ * {@link groupDependencyEnvs}, and installs each distinct set into its own env
+ * under the workspace's target folder.
  *
- * The merge fails closed — before npm is ever invoked — when two workflows
- * declare the same package with different specifiers, naming the package,
- * both specifiers, and both workflow files; see {@link mergeWorkflowPlugins}
- * for why. Identical duplicate specifiers merge silently, as they always have.
+ * Workflows may declare different specifiers for the same package: they hash
+ * to different envs and never share a `node_modules`. Workflows with identical
+ * sets share one env and one install.
+ *
+ * Every env is attempted even when one fails, and the failures are reported
+ * together, each naming its env hash and the workflows that use it — the
+ * author is fixing declarations, and one pass should surface the whole list.
+ * Pruning ({@link SetupOptions.pruneStaleEnvs}) runs only when every install
+ * succeeded, so a half-set-up workspace never also loses its old envs.
  *
  * `targetFolder` is optional. When it is omitted the folder comes from
  * `targetFolder:` in the workspace document, and failing that from
  * `<workspace directory>/.rawbox` — see {@link resolveTargetFolder}. That
  * default is what makes `workspace setup` and `workflow run` agree without any
- * further configuration: the runner resolves plugins from the same resolved
- * folder.
- *
- * @returns The absolute target folder that was set up, so a caller can report
- *   where the install actually landed rather than echoing what it was given.
+ * further configuration: the runner resolves plugins from the same envs.
  */
 export async function setupWorkspace(
   workspacePath: string,
   targetFolder?: string | undefined,
   options: SetupOptions = {},
-): Promise<Result<string, string>> {
+): Promise<Result<SetupWorkspaceResult, string>> {
   const workspaceResult = await loadAndValidateWorkspace(workspacePath);
   if (workspaceResult.isErr()) {
     return err(workspaceResult.error);
@@ -450,20 +465,59 @@ export async function setupWorkspace(
     return err(workflowsResult.error);
   }
 
-  const pluginsResult = mergeWorkflowPlugins(workflowsResult.value);
-  if (pluginsResult.isErr()) {
-    return err(pluginsResult.error);
-  }
-  const plugins = pluginsResult.value;
-
   const workspaceDir = path.dirname(path.resolve(workspacePath));
   const resolvedTargetFolder = resolveTargetFolder(workspaceDir, workspace, targetFolder);
 
-  const setupResult = await setupNpmPackage(
+  const envs = groupDependencyEnvs(
     resolvedTargetFolder,
-    plugins,
+    workflowsResult.value.map((loaded) => ({
+      path: loaded.path,
+      dependencies: loaded.workflow.dependencies,
+    })),
     workspaceDir,
-    options,
   );
-  return setupResult.map(() => resolvedTargetFolder);
+
+  const withEnvLock =
+    options.withEnvLock ?? (<T>(_envDir: string, fn: () => Promise<T>): Promise<T> => fn());
+
+  const results = await mapWithConcurrency(
+    envs,
+    options.concurrency ?? DEFAULT_SETUP_CONCURRENCY,
+    (group) =>
+      withEnvLock(group.envDir, () =>
+        setupDependencyEnv(resolvedTargetFolder, group.dependencies, workspaceDir, options),
+      ).catch((e: unknown) => err<string | undefined, string>(getErrorMessage(e))),
+  );
+
+  const failureList: string[] = [];
+  results.forEach((result, index) => {
+    if (result.isOk()) return;
+    // Guarded: `results` is index-aligned with `envs`.
+    const group = envs[index] as DependencyEnvGroup;
+    failureList.push(
+      `Env ${group.hash} (used by ${group.workflowPathList.join(', ')}) failed to install:\n` +
+        result.error,
+    );
+  });
+
+  if (failureList.length > 0) {
+    return err(failureList.join('\n\n'));
+  }
+
+  let prunedEnvs: string[] = [];
+  if (options.pruneStaleEnvs !== false) {
+    try {
+      prunedEnvs = await pruneStaleDependencyEnvs(
+        resolvedTargetFolder,
+        new Set(envs.map((group) => group.hash)),
+      );
+    } catch (e) {
+      return err(
+        `Every env installed, but pruning unused envs under "${resolvedTargetFolder}" failed: ` +
+          getErrorMessage(e),
+      );
+    }
+  }
+
+  return ok({ targetFolder: resolvedTargetFolder, envs, prunedEnvs });
 }

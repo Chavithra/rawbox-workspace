@@ -3,13 +3,13 @@
 `@rawbox/rawbox-plugin-default` contains the core set of operations and control-flows
 bundled out-of-the-box with the Rawbox Framework.
 
-A workflow reaches them by declaring the package under `plugins:` and naming an
+A workflow reaches them by declaring the package under `dependencies:` and naming an
 **operation path** on a step. The path is the definition path without its `./` prefix and
 `.definition.js` suffix — `operation: time/sleep` addresses
 `./time/sleep.definition.js`.
 
 ```yaml
-plugins:
+dependencies:
   "@rawbox/rawbox-plugin-default": "^0.1.0"
 ```
 
@@ -139,7 +139,7 @@ kind: Workflow
 formatVersion: "1.0"
 name: counted-loop
 
-plugins:
+dependencies:
   "@rawbox/rawbox-plugin-default": "^0.1.0"
 
 storage:
@@ -215,7 +215,7 @@ kind: Workflow
 formatVersion: "1.0"
 name: system-monitor
 
-plugins:
+dependencies:
   "@rawbox/rawbox-plugin-default": "^0.1.0"
 
 storage:

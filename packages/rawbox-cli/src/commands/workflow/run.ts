@@ -6,19 +6,17 @@ import type { Argv } from 'yargs';
 import {
   DOCUMENT_KIND,
   OUTCOME,
-  PluginDiscoverer,
   STEP_DETAIL_LIST,
   createOtelSink,
   createRunId,
-  dedupePathList,
   discoverWorkspace,
   loadAndValidateWorkspace,
   parseConfig,
+  resolveDependencyEnvDir,
   resolveLogsConfig,
   resolveTargetFolder,
   runWorkflowInstance,
-  setupNpmPackage,
-  setupWorkspace,
+  setupDependencyEnv,
   validateWorkflowType,
   type RunEventSink,
   type StepDetail,
@@ -34,7 +32,7 @@ import { pruneOptionsFromResolvedLogs, pruneRunsOpportunistically } from '../../
 import { registryFilePathFor, writeRegistryEntrySync } from '../../runs/registry-io.js';
 import { createRunRegistrySink } from '../../runs/registry-sink.js';
 import { RUN_REGISTRY_FORMAT, RUN_STATUS, type RunRegistryEntry } from '../../runs/types.js';
-import { performAutoSetup } from './auto-setup.js';
+import { findUnresolvedInEnv, performAutoSetup } from './auto-setup.js';
 // Statically imported on purpose, and safe to be: `telemetry/otel.ts` has no
 // static OpenTelemetry import of its own — every SDK package is behind a
 // dynamic `import()` inside `startOtelSdk`, so a run that never activates the
@@ -514,53 +512,49 @@ export async function runWorkflowCommand(
 
   // -- 3. Auto-setup ----------------------------------------------------------
   // Collapses `workspace setup` into `run` itself — auto-setup on run
-  // (rawbox-cli README, "Execute Workflow (`run` / `workflow run`)"): before ever attempting the run, check whether
-  // every plugin this workflow declares resolves from the same bases
-  // `runWorkflowInstance` resolves from, and if not, install into the
-  // resolved target folder first. `--no-setup` (`options.setup === false`)
-  // opts back out entirely — a missing plugin then fails inside
-  // `runWorkflowInstance` exactly as it always has. `--setup`
-  // (`options.setup === true`) forces a reinstall unconditionally, even when
-  // everything already resolves.
+  // (rawbox-cli README, "Execute Workflow (`run` / `workflow run`)"): before
+  // ever attempting the run, check whether this workflow's dependency env,
+  // `<target folder>/envs/<hash>/`, is installed and provides every declared
+  // plugin, and if not, install it first. `--no-setup`
+  // (`options.setup === false`) opts back out entirely — a missing plugin
+  // then fails inside `runWorkflowInstance` exactly as it always has.
+  // `--setup` (`options.setup === true`) forces a reinstall unconditionally,
+  // even when the env is already installed. A workflow declaring no
+  // dependencies has no env and nothing to set up.
   //
-  // Made mutually exclusive per target folder by `performAutoSetup`
-  // (`auto-setup.ts`): several `run` processes against one workspace,
-  // started concurrently — the documented multi-workflow pattern — no
-  // longer race each other's `npm install` into the shared target folder. A
-  // process that only needed what a concurrent winner already installed
+  // Made mutually exclusive per env by `performAutoSetup` (`auto-setup.ts`):
+  // concurrent `run`s of workflows sharing one `dependencies:` map no longer
+  // race each other's `npm install` into the same env. A process that only
+  // needed what a concurrent winner already installed
   // ('joined-existing-install') never installs anything itself.
-  if (options.setup !== false) {
+  const resolveDir = scratchWorkspace ? scratchWorkspaceDir! : path.dirname(workspaceFile!);
+  const envDir = resolveDependencyEnvDir(resolvedTargetFolder, workflow.dependencies, resolveDir);
+  if (options.setup !== false && envDir !== undefined) {
     const forceSetup = options.setup === true;
-    const declaredPlugins = Object.keys(workflow.plugins);
-    const resolveDir = scratchWorkspace ? scratchWorkspaceDir! : path.dirname(workspaceFile!);
-    const resolveBases = dedupePathList([resolvedTargetFolder, resolveDir, process.cwd()]);
-    const findUnresolved = (): string[] =>
-      PluginDiscoverer.findUnresolvedPlugins(declaredPlugins, { resolveFrom: resolveBases });
+    const declaredPlugins = Object.keys(workflow.dependencies);
+    const findUnresolved = (): string[] => findUnresolvedInEnv(envDir, declaredPlugins);
 
-    const outcome = await performAutoSetup(resolvedTargetFolder, forceSetup, {
+    const outcome = await performAutoSetup(envDir, forceSetup, {
       findUnresolved,
       install: async () => {
         const unresolvedPlugins = findUnresolved();
         p.log.info(
           forceSetup
-            ? `--setup passed: reinstalling this workspace's plugins into ${pc.cyan(resolvedTargetFolder)}...`
+            ? `--setup passed: reinstalling this workflow's plugins into ${pc.cyan(envDir)}...`
             : `Auto-setup: plugin${unresolvedPlugins.length === 1 ? '' : 's'} not yet installed ` +
-                `(${unresolvedPlugins.join(', ')}) — installing into ${pc.cyan(resolvedTargetFolder)}...`,
+                `(${unresolvedPlugins.join(', ')}) — installing into ${pc.cyan(envDir)}...`,
         );
 
-        // `setupWorkspace` re-reads and merges every workflow a *disk*
-        // workspace document lists — meaningless here, since a scratch
-        // workspace is never written to disk and by construction lists
-        // exactly this one workflow. `setupNpmPackage` is `setupWorkspace`'s
-        // own install step, called directly with this workflow's `plugins:`
-        // map instead of a merge of several.
-        const setupResult = scratchWorkspace
-          ? (await setupNpmPackage(resolvedTargetFolder, workflow.plugins, scratchWorkspaceDir!)).map(
-              () => resolvedTargetFolder,
-            )
-          : await setupWorkspace(workspaceFile!, resolvedTargetFolder);
+        // Scratch and disk workspaces alike install only this workflow's
+        // `dependencies:` into its own env, so a sibling workflow's broken
+        // declaration can never block this run.
+        const setupResult = await setupDependencyEnv(
+          resolvedTargetFolder,
+          workflow.dependencies,
+          resolveDir,
+        );
         return setupResult.isOk()
-          ? { ok: true, targetFolder: setupResult.value }
+          ? { ok: true, envDir: setupResult.value ?? envDir }
           : { ok: false, error: setupResult.error };
       },
       logger: {
@@ -571,12 +565,12 @@ export async function runWorkflowCommand(
 
     switch (outcome.kind) {
       case 'installed':
-        p.log.info(`Auto-setup complete — plugins installed into ${pc.cyan(outcome.targetFolder)}.`);
+        p.log.info(`Auto-setup complete — plugins installed into ${pc.cyan(outcome.envDir)}.`);
         break;
       case 'joined-existing-install':
         p.log.info(
-          `Auto-setup: another concurrent run already installed this workspace's plugins into ` +
-            `${pc.cyan(resolvedTargetFolder)} — proceeding without installing again.`,
+          `Auto-setup: another concurrent run already installed this workflow's plugins into ` +
+            `${pc.cyan(envDir)} — proceeding without installing again.`,
         );
         break;
       case 'failed':

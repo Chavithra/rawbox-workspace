@@ -43,7 +43,7 @@ export const NON_CONTROL_FLOW_OPERATION_PATTERN =
   `^(?!control-flow/)${OPERATION_SEGMENT}(?:/${OPERATION_SEGMENT})*$`;
 
 /**
- * A package name declared as a key of the workflow's `plugins:` map.
+ * A package name declared as a key of the workflow's `dependencies:` map.
  * Cross-referencing is an exact string match, checked by the resolver.
  */
 export const PluginName = Type.String({ minLength: 1 });

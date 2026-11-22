@@ -15,8 +15,8 @@ rawbox-cli workspace create --name my-workspace
 rawbox-cli run my-workspace/workflows/launch.workflow.yaml
 ```
 
-Nothing to set up in between: the scaffolded workspace is runnable, and its missing plugins
-are installed on the first run.
+Nothing to set up in between: the scaffolded workspace is runnable, and the workflow's
+dependency environment (`.rawbox/envs/<hash>/`) is installed on the first run.
 
 ```text
 WORKFLOW launch (workspace my-workspace) ·······································
@@ -47,7 +47,8 @@ Two ideas carry the whole framework:
 - **Workspaces** group workflows that cooperate: they share one storage environment, so
   one workflow can read what another wrote — that is how multi-process systems are built.
 
-The generated example, abridged — plugins are declared like npm dependencies, every key is
+The generated example, abridged — `dependencies:` are declared like npm dependencies (each distinct map gets its own
+installed environment), every key is
 declared once in `storage.keys` with everything it needs, and every step maps its fields to
 those keys:
 
@@ -56,7 +57,7 @@ kind: Workflow
 formatVersion: "1.0"
 name: launch
 
-plugins:
+dependencies:
   "@rawbox/rawbox-plugin-default": "^0.1.0"
 
 storage:

@@ -1,18 +1,19 @@
 /**
- * A file lock making `workflow run`'s auto-setup step mutually exclusive per
- * target folder.
+ * A file lock making installs into one dependency env directory mutually
+ * exclusive.
  *
- * Several `rawbox-cli run` processes against one workspace, started
- * concurrently — the documented multi-workflow pattern (see
- * `.agents/skills/rawbox-workflow-creation/SKILL.md`, "Setup and Execution" / "Watching a Run") — each
- * independently discover the same missing plugin(s) via
- * `PluginDiscoverer.findUnresolvedPlugins` and would otherwise each invoke
- * `npm install` into the very same target folder at the same time; npm does
- * not tolerate two concurrent installs sharing one prefix. This module is
- * the fix: an exclusive lock file at `<targetFolder>/.rawbox-setup.lock`,
- * created with Node's `wx` flag — the same `O_EXCL` guarantee a plain
- * `open(2)` gives — so exactly one process ever wins the race to create it.
- * See `auto-setup.ts` for how `workflow run` uses this.
+ * Several `rawbox-cli run` processes for workflows declaring the same
+ * `dependencies:` map, started concurrently — the documented multi-workflow
+ * pattern (see `.agents/skills/rawbox-workflow-creation/SKILL.md`, "Setup and Execution" / "Watching a Run") —
+ * each find the same env directory, `<targetFolder>/envs/<hash>/`, not yet
+ * installed and would otherwise each invoke `npm install` into it at the same
+ * time; npm does not tolerate two concurrent installs sharing one prefix.
+ * `workspace setup` installing that env alongside them is the same hazard.
+ * This module is the fix: an exclusive lock file at
+ * `<envDir>/.rawbox-setup.lock`, created with Node's `wx` flag — the same
+ * `O_EXCL` guarantee a plain `open(2)` gives — so exactly one process ever
+ * wins the race to create it. See `auto-setup.ts` for how `workflow run` uses
+ * this, and {@link withSetupLock} for `workspace setup`.
  *
  * Process identity for stale-lock recovery reuses `../../runs/pid-probe.js`
  * verbatim: a lock naming a pid that is no longer alive, or a live pid whose
@@ -25,6 +26,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { DEPENDENCY_ENV_SETUP_LOCK_FILENAME } from '@rawbox/runner';
+
 import {
   getProcessStartedAtMs,
   probeProcess,
@@ -32,12 +35,15 @@ import {
   type ProbeFn,
 } from '../../runs/pid-probe.js';
 
-/** Lock file name, inside the target folder auto-setup installs into. */
-export const SETUP_LOCK_FILE_NAME = '.rawbox-setup.lock';
+/**
+ * Lock file name, inside the env directory being installed into. Owned by the
+ * runner, whose env pruning must recognise and skip a locked env.
+ */
+export const SETUP_LOCK_FILE_NAME = DEPENDENCY_ENV_SETUP_LOCK_FILENAME;
 
-/** `<targetFolder>/.rawbox-setup.lock`. */
-export function setupLockPathFor(targetFolder: string): string {
-  return path.join(targetFolder, SETUP_LOCK_FILE_NAME);
+/** `<envDir>/.rawbox-setup.lock`. */
+export function setupLockPathFor(envDir: string): string {
+  return path.join(envDir, SETUP_LOCK_FILE_NAME);
 }
 
 /** Contents of a lock file — enough to identify, and later verify, its owner. */
@@ -133,7 +139,7 @@ function isLockStale(payload: SetupLockPayload, probe: ProbeFn): boolean {
 }
 
 /**
- * Attempts to acquire the auto-setup lock for `targetFolder`, recovering a
+ * Attempts to acquire the setup lock for `envDir`, recovering a
  * stale one along the way: a dead or recycled owning pid, or a corrupt file
  * old enough that it cannot just be a write still in progress.
  *
@@ -145,14 +151,14 @@ function isLockStale(payload: SetupLockPayload, probe: ProbeFn): boolean {
  * than retry this call in a loop itself.
  */
 export async function acquireSetupLock(
-  targetFolder: string,
+  envDir: string,
   options: AcquireSetupLockOptions = {},
 ): Promise<AcquireSetupLockResult> {
-  const lockPath = setupLockPathFor(targetFolder);
+  const lockPath = setupLockPathFor(envDir);
   const probe = options.probe ?? probeProcess;
   const corruptStaleAfterMs = options.corruptStaleAfterMs ?? DEFAULT_SETUP_LOCK_CORRUPT_STALE_MS;
 
-  await fs.mkdir(targetFolder, { recursive: true });
+  await fs.mkdir(envDir, { recursive: true });
 
   for (;;) {
     const payload: SetupLockPayload = {
@@ -240,5 +246,41 @@ export async function waitForSetupLockRelease(
       return { status: 'timed-out' };
     }
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+}
+
+/**
+ * Runs `fn` while holding `envDir`'s setup lock, waiting for any other holder
+ * to release it first — the blocking counterpart of `performAutoSetup`'s race.
+ *
+ * Shaped to be `setupWorkspace`'s `withEnvLock`, so `workspace setup` and a
+ * concurrent `run`'s auto-setup serialize on the same per-env file. A wait
+ * that times out rejects naming the lock path, which `setupWorkspace` reports
+ * as that env's install failure.
+ */
+export async function withSetupLock<T>(
+  envDir: string,
+  fn: () => Promise<T>,
+  options: AcquireSetupLockOptions & WaitForSetupLockOptions = {},
+): Promise<T> {
+  for (;;) {
+    const acquireResult = await acquireSetupLock(envDir, options);
+    if (acquireResult.status === 'acquired') {
+      try {
+        return await fn();
+      } finally {
+        await releaseSetupLock(setupLockPathFor(envDir));
+      }
+    }
+
+    const waitResult = await waitForSetupLockRelease(acquireResult.lockPath, options);
+    if (waitResult.status === 'timed-out') {
+      const holderPid = acquireResult.payload?.pid;
+      throw new Error(
+        `Timed out waiting for the setup lock at "${acquireResult.lockPath}"` +
+          (holderPid !== undefined ? ` (held by pid ${holderPid})` : '') +
+          ' to be released. Remove it manually once you have confirmed no install is really in progress.',
+      );
+    }
   }
 }

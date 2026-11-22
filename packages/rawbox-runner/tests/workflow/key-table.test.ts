@@ -41,7 +41,7 @@ function workflowWithSteps(
     kind: 'Workflow',
     formatVersion: '1.0',
     name: 'example',
-    plugins: { '@rawbox/rawbox-plugin-default': '^1.0.0' },
+    dependencies: { '@rawbox/rawbox-plugin-default': '^1.0.0' },
     storage: { defaultStrategy: KV, ...block },
     steps,
   };

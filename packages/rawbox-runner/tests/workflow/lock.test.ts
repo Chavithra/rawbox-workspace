@@ -22,6 +22,7 @@ import {
   RAWBOX_LOCK_VERSION,
   type RawboxLock,
 } from '../../src/workflow/lock-types.js';
+import { resolveDependencyEnvDir } from '../../src/workflow/dependency-env.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -83,12 +84,12 @@ function contractRecordFor(operation: string): Record<string, unknown> {
   };
 }
 
-/** Installs a fake plugin into `<workspaceDir>/node_modules/<name>`. */
+/** Installs a fake plugin into `<rootDir>/node_modules/<name>`. */
 async function installFakePlugin(
-  workspaceDir: string,
+  rootDir: string,
   plugin: FakePlugin,
 ): Promise<void> {
-  const dir = path.join(workspaceDir, 'node_modules', ...plugin.name.split('/'));
+  const dir = path.join(rootDir, 'node_modules', ...plugin.name.split('/'));
   await fs.mkdir(dir, { recursive: true });
 
   await fs.writeFile(
@@ -138,7 +139,7 @@ function workflowYaml(name: string, plugins: readonly FakePlugin[]): string {
     'formatVersion: "1.0"',
     `name: ${name}`,
     '',
-    'plugins:',
+    'dependencies:',
     pluginLines,
     '',
     'storage:',
@@ -163,19 +164,40 @@ function workflowYaml(name: string, plugins: readonly FakePlugin[]): string {
   ].join('\n');
 }
 
+/** The `dependencies:` map {@link workflowYaml} declares for `plugins`. */
+function dependenciesFor(
+  plugins: readonly FakePlugin[],
+  specifier = '^1.0.0',
+): Record<string, string> {
+  return Object.fromEntries(plugins.map((plugin) => [plugin.name, specifier]));
+}
+
+/** The env `workspace setup` would install `dependencies` into, under the default target folder. */
+function envDirFor(workspaceDir: string, dependencies: Record<string, string>): string {
+  return resolveDependencyEnvDir(
+    path.join(workspaceDir, '.rawbox'),
+    dependencies,
+    workspaceDir,
+  ) as string;
+}
+
 interface Fixture {
   workspaceDir: string;
   workspaceFile: string;
   workflowFile: string;
   packageNames: string[];
+  dependencies: Record<string, string>;
+  /** `<workspaceDir>/.rawbox/envs/<hash>`, holding the plugins' `node_modules`. */
+  envDir: string;
 }
 
 let fixtureCounter = 0;
 
 /**
  * Builds `<sandbox>/<label>/workspaces/<label>/` holding a `workspace.yaml`, a
- * `workflows/<label>.workflow.yaml`, and a `node_modules` containing the given
- * plugins — the layout `workspace create` scaffolds.
+ * `workflows/<label>.workflow.yaml`, and the workflow's env under
+ * `.rawbox/envs/<hash>/node_modules` containing the given plugins — the layout
+ * `workspace create` scaffolds and `workspace setup` installs.
  */
 async function makeFixture(
   label: string,
@@ -200,8 +222,10 @@ async function makeFixture(
     'utf-8',
   );
 
+  const dependencies = dependenciesFor(plugins);
+  const envDir = envDirFor(workspaceDir, dependencies);
   for (const plugin of plugins) {
-    await installFakePlugin(workspaceDir, plugin);
+    await installFakePlugin(envDir, plugin);
   }
 
   return {
@@ -209,6 +233,8 @@ async function makeFixture(
     workspaceFile,
     workflowFile,
     packageNames: plugins.map((plugin) => plugin.name),
+    dependencies,
+    envDir,
   };
 }
 
@@ -225,12 +251,12 @@ async function exists(filePath: string): Promise<boolean> {
 }
 
 describe('resolvePluginLockEntries', () => {
-  it('resolves each declared package from the workspace directory', async () => {
+  it('resolves each declared package from the workflow env', async () => {
     const fixture = await makeFixture('resolve', [SLEEP_PLUGIN, QUEUE_PLUGIN]);
 
     const result = await resolvePluginLockEntries(
-      fixture.packageNames,
-      fixture.workspaceDir,
+      fixture.dependencies,
+      fixture.envDir,
     );
 
     const entries = result._unsafeUnwrap();
@@ -252,8 +278,8 @@ describe('resolvePluginLockEntries', () => {
     const fixture = await makeFixture('scoped-resolution');
 
     const fromWorkspace = await resolvePluginLockEntries(
-      fixture.packageNames,
-      fixture.workspaceDir,
+      fixture.dependencies,
+      fixture.envDir,
     );
     expect(fromWorkspace.isOk()).toBe(true);
 
@@ -262,7 +288,7 @@ describe('resolvePluginLockEntries', () => {
     const strangerDir = path.join(sandboxRoot, 'stranger');
     await fs.mkdir(strangerDir, { recursive: true });
     const fromElsewhere = await resolvePluginLockEntries(
-      fixture.packageNames,
+      fixture.dependencies,
       strangerDir,
     );
     expect(fromElsewhere.isErr()).toBe(true);
@@ -272,8 +298,8 @@ describe('resolvePluginLockEntries', () => {
     const fixture = await makeFixture('missing');
 
     const result = await resolvePluginLockEntries(
-      ['@fixture/rawbox-plugin-absent'],
-      fixture.workspaceDir,
+      { '@fixture/rawbox-plugin-absent': '^1.0.0' },
+      fixture.envDir,
     );
 
     const message = result._unsafeUnwrapErr();
@@ -286,7 +312,7 @@ describe('resolvePluginLockEntries', () => {
     const cache = new ContractRegistryCache();
 
     const entries = (
-      await resolvePluginLockEntries(fixture.packageNames, fixture.workspaceDir, cache)
+      await resolvePluginLockEntries(fixture.dependencies, fixture.envDir, cache)
     )._unsafeUnwrap();
 
     const hash = entries[0]?.registryHash as string;
@@ -305,7 +331,7 @@ describe('rawbox.lock round-trip', () => {
     const locked = (
       await lockWorkspacePlugins({
         workspaceDir: fixture.workspaceDir,
-        packageNames: fixture.packageNames,
+        dependencies: fixture.dependencies,
       })
     )._unsafeUnwrap();
 
@@ -318,7 +344,7 @@ describe('rawbox.lock round-trip', () => {
     expect(readBack).toBeDefined();
     expect(readBack).toEqual(locked.lock);
     expect(readBack?.version).toBe(RAWBOX_LOCK_VERSION);
-    expect(readBack?.plugins[SLEEP_PLUGIN.name]).toEqual({
+    expect(readBack?.dependencies[SLEEP_PLUGIN.name]?.['^1.0.0']).toEqual({
       resolved: SLEEP_PLUGIN.version,
       registryHash: expectedHash(SLEEP_PLUGIN),
     });
@@ -326,10 +352,10 @@ describe('rawbox.lock round-trip', () => {
     // -- verify -----------------------------------------------------------
     const installed = toRegistryHashByPlugin(
       (
-        await resolvePluginLockEntries(fixture.packageNames, fixture.workspaceDir)
+        await resolvePluginLockEntries(fixture.dependencies, fixture.envDir)
       )._unsafeUnwrap(),
     );
-    expect(verifyRawboxLock(readBack, installed).isOk()).toBe(true);
+    expect(verifyRawboxLock(readBack, installed, fixture.dependencies).isOk()).toBe(true);
   });
 
   it('is written as a commented, key-sorted YAML document', async () => {
@@ -337,7 +363,7 @@ describe('rawbox.lock round-trip', () => {
 
     await lockWorkspacePlugins({
       workspaceDir: fixture.workspaceDir,
-      packageNames: fixture.packageNames,
+      dependencies: fixture.dependencies,
     });
 
     const raw = await fs.readFile(rawboxLockPath(fixture.workspaceDir), 'utf-8');
@@ -345,7 +371,7 @@ describe('rawbox.lock round-trip', () => {
 
     // Sorted regardless of declaration order, so re-locking produces no diff
     // noise and "did anything change?" stays answerable.
-    const keys = Object.keys(YAML.parse(raw).plugins);
+    const keys = Object.keys(YAML.parse(raw).dependencies);
     expect(keys).toEqual([...keys].sort());
   });
 
@@ -355,13 +381,13 @@ describe('rawbox.lock round-trip', () => {
 
     await lockWorkspacePlugins({
       workspaceDir: fixture.workspaceDir,
-      packageNames: fixture.packageNames,
+      dependencies: fixture.dependencies,
     });
     const first = await sha256OfFile(lockPath);
 
     const second = await lockWorkspacePlugins({
       workspaceDir: fixture.workspaceDir,
-      packageNames: fixture.packageNames,
+      dependencies: fixture.dependencies,
     });
 
     expect(await sha256OfFile(lockPath)).toBe(first);
@@ -373,19 +399,154 @@ describe('rawbox.lock round-trip', () => {
     // one workflow, so locking a workflow must never unlock its siblings.
     const fixture = await makeFixture('merge', [SLEEP_PLUGIN, QUEUE_PLUGIN]);
 
+    // Each one-package set is its own env, installed separately.
+    for (const plugin of [QUEUE_PLUGIN, SLEEP_PLUGIN]) {
+      await installFakePlugin(envDirFor(fixture.workspaceDir, dependenciesFor([plugin])), plugin);
+    }
+
     await lockWorkspacePlugins({
       workspaceDir: fixture.workspaceDir,
-      packageNames: [QUEUE_PLUGIN.name],
+      dependencies: dependenciesFor([QUEUE_PLUGIN]),
     });
     await lockWorkspacePlugins({
       workspaceDir: fixture.workspaceDir,
-      packageNames: [SLEEP_PLUGIN.name],
+      dependencies: dependenciesFor([SLEEP_PLUGIN]),
     });
 
     const lock = (await readRawboxLock(fixture.workspaceDir))._unsafeUnwrap();
-    expect(Object.keys(lock?.plugins ?? {}).sort()).toEqual(
+    expect(Object.keys(lock?.dependencies ?? {}).sort()).toEqual(
       [SLEEP_PLUGIN.name, QUEUE_PLUGIN.name].sort(),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Version 2: one entry per (package, canonical specifier)
+//
+// Two workflows of one workspace may pin different versions of one package,
+// each installed into its own env. A lock keyed by name alone could describe
+// only one of them, so the second level is the specifier.
+// ---------------------------------------------------------------------------
+
+describe('rawbox.lock version 2', () => {
+  const SLEEP_V2: FakePlugin = { ...SLEEP_PLUGIN, version: '2.0.0', operation: 'time/sleep-v2' };
+
+  /** Locks `plugin` at `specifier`, having installed it into that set's env. */
+  async function lockAt(fixture: Fixture, plugin: FakePlugin, specifier: string) {
+    const dependencies = dependenciesFor([plugin], specifier);
+    await installFakePlugin(envDirFor(fixture.workspaceDir, dependencies), plugin);
+    return (
+      await lockWorkspacePlugins({ workspaceDir: fixture.workspaceDir, dependencies })
+    )._unsafeUnwrap();
+  }
+
+  it('keeps one entry per specifier when two sets pin one package differently', async () => {
+    const fixture = await makeFixture('two-specifiers');
+
+    const first = await lockAt(fixture, SLEEP_PLUGIN, '^1.0.0');
+    const second = await lockAt(fixture, SLEEP_V2, '^2.0.0');
+    expect(first.envDir).not.toBe(second.envDir);
+    expect(second.entries[0]?.specifier).toBe('^2.0.0');
+
+    const lock = (await readRawboxLock(fixture.workspaceDir))._unsafeUnwrap();
+    expect(lock?.version).toBe('2');
+    expect(lock?.dependencies[SLEEP_PLUGIN.name]).toEqual({
+      '^1.0.0': { resolved: SLEEP_PLUGIN.version, registryHash: expectedHash(SLEEP_PLUGIN) },
+      '^2.0.0': { resolved: SLEEP_V2.version, registryHash: expectedHash(SLEEP_V2) },
+    });
+  });
+
+  it('re-locking one specifier leaves sibling specifiers and packages untouched', async () => {
+    const fixture = await makeFixture('sibling-entries');
+    const sibling = { resolved: '9.9.9', registryHash: 'sibling-hash' };
+    await writeRawboxLock(fixture.workspaceDir, {
+      version: RAWBOX_LOCK_VERSION,
+      dependencies: {
+        [SLEEP_PLUGIN.name]: { '^0.1.0': sibling },
+        [QUEUE_PLUGIN.name]: { '^0.4.0': sibling },
+      },
+    });
+
+    const result = await lockAt(fixture, SLEEP_PLUGIN, '^1.0.0');
+    expect(result.changed).toEqual([SLEEP_PLUGIN.name]);
+
+    const lock = (await readRawboxLock(fixture.workspaceDir))._unsafeUnwrap();
+    expect(lock?.dependencies[SLEEP_PLUGIN.name]?.['^0.1.0']).toEqual(sibling);
+    expect(lock?.dependencies[SLEEP_PLUGIN.name]?.['^1.0.0']?.registryHash).toBe(
+      expectedHash(SLEEP_PLUGIN),
+    );
+    expect(lock?.dependencies[QUEUE_PLUGIN.name]).toEqual({ '^0.4.0': sibling });
+  });
+
+  it('sorts package names, then specifiers, so the file is byte-stable', async () => {
+    const fixture = await makeFixture('sorted');
+    const entry = { resolved: '1.0.0', registryHash: 'h' };
+    const unsorted: RawboxLock = {
+      version: RAWBOX_LOCK_VERSION,
+      dependencies: {
+        'zeta-plugin': { '^2.0.0': entry, '^1.0.0': entry },
+        'alpha-plugin': { 'file:b': entry, 'file:a': entry, '^3.0.0': entry },
+      },
+    };
+    const reordered: RawboxLock = {
+      version: RAWBOX_LOCK_VERSION,
+      dependencies: {
+        'alpha-plugin': { '^3.0.0': entry, 'file:a': entry, 'file:b': entry },
+        'zeta-plugin': { '^1.0.0': entry, '^2.0.0': entry },
+      },
+    };
+
+    const lockPath = rawboxLockPath(fixture.workspaceDir);
+    await writeRawboxLock(fixture.workspaceDir, unsorted);
+    const first = await fs.readFile(lockPath, 'utf-8');
+    await writeRawboxLock(fixture.workspaceDir, reordered);
+    expect(await fs.readFile(lockPath, 'utf-8')).toBe(first);
+
+    const parsed = YAML.parse(first) as RawboxLock;
+    expect(Object.keys(parsed.dependencies)).toEqual(['alpha-plugin', 'zeta-plugin']);
+    expect(Object.keys(parsed.dependencies['alpha-plugin'] ?? {})).toEqual([
+      '^3.0.0',
+      'file:a',
+      'file:b',
+    ]);
+    expect(Object.keys(parsed.dependencies['zeta-plugin'] ?? {})).toEqual(['^1.0.0', '^2.0.0']);
+  });
+
+  it('verifies against the entry matching the declared specifier only', () => {
+    const lock: RawboxLock = {
+      version: RAWBOX_LOCK_VERSION,
+      dependencies: {
+        [SLEEP_PLUGIN.name]: {
+          '^1.0.0': { resolved: '1.2.3', registryHash: 'hash-v1' },
+          '^2.0.0': { resolved: '2.0.0', registryHash: 'hash-v2' },
+        },
+      },
+    };
+
+    const installed = { [SLEEP_PLUGIN.name]: 'hash-v2' };
+    expect(verifyRawboxLock(lock, installed, { [SLEEP_PLUGIN.name]: '^2.0.0' }).isOk()).toBe(true);
+
+    const mismatch = verifyRawboxLock(lock, installed, { [SLEEP_PLUGIN.name]: '^1.0.0' });
+    expect(mismatch._unsafeUnwrapErr()).toContain('hash-v1');
+
+    // A specifier with no entry is unlocked, not a mismatch.
+    expect(verifyRawboxLock(lock, installed, { [SLEEP_PLUGIN.name]: '^3.0.0' }).isOk()).toBe(true);
+  });
+
+  it('looks `file:` specifiers up by their canonical, relative form', () => {
+    const lock: RawboxLock = {
+      version: RAWBOX_LOCK_VERSION,
+      dependencies: {
+        [SLEEP_PLUGIN.name]: { 'file:plugins/alpha': { resolved: '1.0.0', registryHash: 'locked' } },
+      },
+    };
+
+    const result = verifyRawboxLock(
+      lock,
+      { [SLEEP_PLUGIN.name]: 'different' },
+      { [SLEEP_PLUGIN.name]: 'file:./plugins/alpha/' },
+    );
+    expect(result._unsafeUnwrapErr()).toContain('specifier: file:plugins/alpha');
   });
 });
 
@@ -404,7 +565,7 @@ describe('readRawboxLock', () => {
     const fixture = await makeFixture('corrupt-lock');
     await fs.writeFile(
       rawboxLockPath(fixture.workspaceDir),
-      YAML.stringify({ version: '99', plugins: {} }),
+      YAML.stringify({ version: '99', dependencies: {} }),
       'utf-8',
     );
 
@@ -417,7 +578,9 @@ describe('readRawboxLock', () => {
     const fixture = await makeFixture('json-lock');
     const lock: RawboxLock = {
       version: RAWBOX_LOCK_VERSION,
-      plugins: { [SLEEP_PLUGIN.name]: { resolved: '1.0.0', registryHash: 'abc' } },
+      dependencies: {
+        [SLEEP_PLUGIN.name]: { '^1.0.0': { resolved: '1.0.0', registryHash: 'abc' } },
+      },
     };
     await fs.writeFile(
       rawboxLockPath(fixture.workspaceDir),
@@ -432,9 +595,9 @@ describe('readRawboxLock', () => {
     const fixture = await makeFixture('direct-write');
     const lock: RawboxLock = {
       version: RAWBOX_LOCK_VERSION,
-      plugins: {
-        [QUEUE_PLUGIN.name]: { resolved: '0.4.0', registryHash: 'ffff' },
-        [SLEEP_PLUGIN.name]: { resolved: '1.2.3', registryHash: 'aaaa' },
+      dependencies: {
+        [QUEUE_PLUGIN.name]: { '^0.4.0': { resolved: '0.4.0', registryHash: 'ffff' } },
+        [SLEEP_PLUGIN.name]: { '^1.2.0': { resolved: '1.2.3', registryHash: 'aaaa' } },
       },
     };
 
@@ -458,17 +621,17 @@ describe('verifyRawboxLock', () => {
     const lock = (
       await lockWorkspacePlugins({
         workspaceDir: before.workspaceDir,
-        packageNames: before.packageNames,
+        dependencies: before.dependencies,
       })
     )._unsafeUnwrap().lock;
 
     const installed = toRegistryHashByPlugin(
       (
-        await resolvePluginLockEntries(after.packageNames, after.workspaceDir)
+        await resolvePluginLockEntries(after.dependencies, after.envDir)
       )._unsafeUnwrap(),
     );
 
-    const result = verifyRawboxLock(lock, installed);
+    const result = verifyRawboxLock(lock, installed, after.dependencies);
     expect(result.isErr()).toBe(true);
 
     const message = result._unsafeUnwrapErr();
@@ -484,35 +647,51 @@ describe('verifyRawboxLock', () => {
   it('reports every mismatched package, not just the first', () => {
     const lock: RawboxLock = {
       version: RAWBOX_LOCK_VERSION,
-      plugins: {
-        [SLEEP_PLUGIN.name]: { resolved: '1.0.0', registryHash: 'aaaa' },
-        [QUEUE_PLUGIN.name]: { resolved: '1.0.0', registryHash: 'bbbb' },
+      dependencies: {
+        [SLEEP_PLUGIN.name]: { '^1.0.0': { resolved: '1.0.0', registryHash: 'aaaa' } },
+        [QUEUE_PLUGIN.name]: { '^1.0.0': { resolved: '1.0.0', registryHash: 'bbbb' } },
       },
     };
 
-    const message = verifyRawboxLock(lock, {
-      [SLEEP_PLUGIN.name]: 'zzzz',
-      [QUEUE_PLUGIN.name]: 'yyyy',
-    })._unsafeUnwrapErr();
+    const message = verifyRawboxLock(
+      lock,
+      {
+        [SLEEP_PLUGIN.name]: 'zzzz',
+        [QUEUE_PLUGIN.name]: 'yyyy',
+      },
+      dependenciesFor([SLEEP_PLUGIN, QUEUE_PLUGIN]),
+    )._unsafeUnwrapErr();
 
     expect(message).toContain(SLEEP_PLUGIN.name);
     expect(message).toContain(QUEUE_PLUGIN.name);
   });
 
   it('treats an absent lock, and an absent entry, as unlocked', () => {
-    expect(verifyRawboxLock(undefined, { [SLEEP_PLUGIN.name]: 'aaaa' }).isOk()).toBe(true);
+    expect(
+      verifyRawboxLock(
+        undefined,
+        { [SLEEP_PLUGIN.name]: 'aaaa' },
+        dependenciesFor([SLEEP_PLUGIN]),
+      ).isOk(),
+    ).toBe(true);
 
     const partial: RawboxLock = {
       version: RAWBOX_LOCK_VERSION,
-      plugins: { [SLEEP_PLUGIN.name]: { resolved: '1.0.0', registryHash: 'aaaa' } },
+      dependencies: {
+        [SLEEP_PLUGIN.name]: { '^1.0.0': { resolved: '1.0.0', registryHash: 'aaaa' } },
+      },
     };
     // A partially locked workspace stays usable: the unlocked package is not
     // an error, and the locked one still has to agree.
     expect(
-      verifyRawboxLock(partial, {
-        [SLEEP_PLUGIN.name]: 'aaaa',
-        [QUEUE_PLUGIN.name]: 'anything',
-      }).isOk(),
+      verifyRawboxLock(
+        partial,
+        {
+          [SLEEP_PLUGIN.name]: 'aaaa',
+          [QUEUE_PLUGIN.name]: 'anything',
+        },
+        dependenciesFor([SLEEP_PLUGIN, QUEUE_PLUGIN]),
+      ).isOk(),
     ).toBe(true);
   });
 });
@@ -527,7 +706,7 @@ describe('locking never touches the workflow file', () => {
 
     const result = await lockWorkspacePlugins({
       workspaceDir: fixture.workspaceDir,
-      packageNames: fixture.packageNames,
+      dependencies: fixture.dependencies,
     });
     expect(result.isOk()).toBe(true);
 
@@ -577,8 +756,8 @@ describe('locking never touches the workflow file', () => {
 
     // ...and the lock it was supposed to write is there, with the right hashes.
     const lock = (await readRawboxLock(fixture.workspaceDir))._unsafeUnwrap();
-    expect(lock?.plugins[SLEEP_PLUGIN.name]?.registryHash).toBe(expectedHash(SLEEP_PLUGIN));
-    expect(lock?.plugins[QUEUE_PLUGIN.name]?.registryHash).toBe(expectedHash(QUEUE_PLUGIN));
+    expect(lock?.dependencies[SLEEP_PLUGIN.name]?.['^1.0.0']?.registryHash).toBe(expectedHash(SLEEP_PLUGIN));
+    expect(lock?.dependencies[QUEUE_PLUGIN.name]?.['^1.0.0']?.registryHash).toBe(expectedHash(QUEUE_PLUGIN));
   });
 
   it('discovers the workspace without --workspace', async () => {
@@ -596,6 +775,6 @@ describe('locking never touches the workflow file', () => {
     );
 
     const lock = (await readRawboxLock(fixture.workspaceDir))._unsafeUnwrap();
-    expect(lock?.plugins[SLEEP_PLUGIN.name]?.registryHash).toBe(expectedHash(SLEEP_PLUGIN));
+    expect(lock?.dependencies[SLEEP_PLUGIN.name]?.['^1.0.0']?.registryHash).toBe(expectedHash(SLEEP_PLUGIN));
   });
 });

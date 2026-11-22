@@ -13,7 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as p from '@clack/prompts';
 
-import { resolvePluginLockEntries } from '@rawbox/runner';
+import { resolveDependencyEnvDir, resolvePluginLockEntries } from '@rawbox/runner';
 
 import { pluginInfo } from '../src/commands/plugin/info.js';
 
@@ -215,7 +215,7 @@ function workflowYaml(pluginName: string = FAKE_PLUGIN): string {
 kind: Workflow
 formatVersion: "1.0"
 name: sleep-workflow
-plugins:
+dependencies:
   ${pluginName}: "^1.0.0"
 ${KV_STORAGE}
 steps:
@@ -244,7 +244,7 @@ steps:
 /** Reads the registry hash the way the command does, for lock fixtures. */
 async function actualRegistryHash(workspaceDirectory: string): Promise<string> {
   const result = await resolvePluginLockEntries(
-    [FAKE_PLUGIN],
+    { [FAKE_PLUGIN]: '^1.0.0' },
     path.join(workspaceDirectory, '.rawbox'),
   );
   if (result.isErr()) {
@@ -255,13 +255,17 @@ async function actualRegistryHash(workspaceDirectory: string): Promise<string> {
   return entry.registryHash;
 }
 
+/** Writes a lock with one entry per package, at the `^1.0.0` specifier {@link workflowYaml} declares. */
 async function writeLock(
   workspaceDirectory: string,
   plugins: Record<string, { resolved: string; registryHash: string }>,
 ): Promise<void> {
+  const dependencies = Object.fromEntries(
+    Object.entries(plugins).map(([name, entry]) => [name, { '^1.0.0': entry }]),
+  );
   await fs.writeFile(
     path.join(workspaceDirectory, 'rawbox.lock'),
-    JSON.stringify({ version: '1', plugins }, null, 2),
+    JSON.stringify({ version: '2', dependencies }, null, 2),
     'utf-8',
   );
 }
@@ -327,7 +331,7 @@ describe('plugin info — installed package with a matching lock', () => {
 kind: Workflow
 formatVersion: "1.0"
 name: typo-workflow
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
 steps:
@@ -353,13 +357,13 @@ steps:
     expect(output).toContain('./control-flow/halt.definition.js');
   });
 
-  it('flags a package declared in plugins: but referenced by no step', async () => {
+  it('flags a package declared in dependencies: but referenced by no step', async () => {
     const scenario = await makeScenario('declared-unused', {
       workflowYaml: `
 kind: Workflow
 formatVersion: "1.0"
 name: unused-workflow
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
 steps: []
@@ -370,7 +374,7 @@ steps: []
     await pluginInfo(scenario.workflowPath);
 
     expectPassed();
-    expect(reported()).toContain('declared in plugins: but unused');
+    expect(reported()).toContain('declared in dependencies: but unused');
   });
 });
 
@@ -571,6 +575,42 @@ describe('plugin info — workspace location', () => {
     // Discovery never ran.
     expect(output).not.toContain('Auto-discovered workspace');
   });
+
+  it("prints the env directory computed from the workflow's whole dependencies: map", async () => {
+    const scenario = await makeScenario('env-display', {
+      workflowYaml: workflowYaml(),
+    });
+    await installFakePlugin(scenario.directory);
+
+    await pluginInfo(scenario.workflowPath);
+
+    expectPassed();
+    const envDir = resolveDependencyEnvDir(
+      path.join(scenario.directory, '.rawbox'),
+      { [FAKE_PLUGIN]: '^1.0.0' },
+      scenario.directory,
+    ) as string;
+    expect(path.dirname(envDir)).toBe(path.join(scenario.directory, '.rawbox', 'envs'));
+    expect(reported()).toContain(`Env:           ${envDir}`);
+  });
+
+  it('prints no env directory for a workflow declaring no dependencies', async () => {
+    const scenario = await makeScenario('env-display-empty', {
+      workflowYaml: `
+kind: Workflow
+formatVersion: "1.0"
+name: empty-workflow
+dependencies: {}
+${KV_STORAGE}
+steps: []
+`,
+    });
+
+    await pluginInfo(scenario.workflowPath);
+
+    expect(reported()).toContain('declares no plugins');
+    expect(reported()).not.toContain('Env:');
+  });
 });
 
 describe('plugin info — document faults', () => {
@@ -597,7 +637,7 @@ stepList: []
 kind: Workflow
 formatVersion: "1.0"
 name: undeclared-workflow
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
 steps:

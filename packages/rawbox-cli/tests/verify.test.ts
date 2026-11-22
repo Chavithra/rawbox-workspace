@@ -229,7 +229,7 @@ function sleepWorkflowYaml(): string {
 kind: Workflow
 formatVersion: "1.0"
 name: sleep-workflow
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
   keys:
@@ -325,7 +325,7 @@ describe('workflow verify — workspace auto-discovery', () => {
 kind: Workflow
 formatVersion: "1.0"
 name: plugin-free-workflow
-plugins: {}
+dependencies: {}
 ${KV_STORAGE}
 steps: []
 `.trim(),
@@ -412,7 +412,7 @@ stepList: []
 kind: Workflow
 formatVersion: "1.0"
 name: boundary-breaker
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
 steps:
@@ -445,7 +445,7 @@ steps:
 kind: Workflow
 formatVersion: "1.0"
 name: boundary-breaker
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
 steps:
@@ -497,7 +497,7 @@ describe('workflow verify — resolution', () => {
 kind: Workflow
 formatVersion: "1.0"
 name: seeded-label-workflow
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
   keys:
@@ -533,7 +533,7 @@ steps:
 kind: Workflow
 formatVersion: "1.0"
 name: seeded-label-workflow
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
   keys:
@@ -573,7 +573,7 @@ steps:
 kind: Workflow
 formatVersion: "1.0"
 name: literal-workflow
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
   keys:
@@ -612,7 +612,7 @@ steps:
 kind: Workflow
 formatVersion: "1.0"
 name: bad-plugin-workflow
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
   keys:
@@ -632,7 +632,7 @@ steps:
 
     expectFailed();
     const output = reported();
-    expect(output).toContain('is not declared in `plugins:`');
+    expect(output).toContain('is not declared in `dependencies:`');
     expect(output).toContain('Declared packages:');
     expect(output).toContain(`- ${FAKE_PLUGIN}`);
     expect(output).toContain(`Did you mean "${FAKE_PLUGIN}"?`);
@@ -645,7 +645,7 @@ steps:
 kind: Workflow
 formatVersion: "1.0"
 name: bad-operation-workflow
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
   keys:
@@ -703,11 +703,12 @@ describe('workflow verify — rawbox.lock', () => {
     await fs.writeFile(
       path.join(scenario.directory, 'rawbox.lock'),
       `
-version: "1"
-plugins:
+version: "2"
+dependencies:
   ${FAKE_PLUGIN}:
-    resolved: "1.0.0"
-    registryHash: "${'0'.repeat(64)}"
+    "^1.0.0":
+      resolved: "1.0.0"
+      registryHash: "${'0'.repeat(64)}"
 `.trim(),
       'utf-8',
     );
@@ -848,7 +849,7 @@ describe('workspace verify', () => {
 kind: Workflow
 formatVersion: "1.0"
 name: ${name}
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "${specifier}"
 ${KV_STORAGE}
 steps: []
@@ -867,24 +868,19 @@ steps: []
     expect(reported()).toContain(`Plugin ${FAKE_PLUGIN} → ^1.0.0`);
   });
 
-  it('fails when two workflows declare different specifiers for one package', async () => {
-    const { workspacePath } = await makeWorkspaceScenario('ws-conflicting', {
+  it('accepts two workflows declaring different specifiers for one package, listing both', async () => {
+    const { workspacePath } = await makeWorkspaceScenario('ws-differing', {
       'a.yaml': pluginWorkflowYaml('workflow-a', '^1.0.0'),
       'b.yaml': pluginWorkflowYaml('workflow-b', '^2.0.0'),
     });
 
     await verifyWorkspace(workspacePath);
 
-    expectFailed();
+    expectPassed();
     const output = reported();
-    expect(output).toContain(`Plugin "${FAKE_PLUGIN}" is declared with 2 different specifiers`);
-    // Both specifiers, and the file that declared each — the fix is always
-    // "make these agree", so the author needs to know which files to edit.
-    expect(output).toContain('"^1.0.0"');
-    expect(output).toContain('"^2.0.0"');
-    expect(output).toContain('./workflows/a.yaml');
-    expect(output).toContain('./workflows/b.yaml');
-    expect(output).toContain('rawbox.lock');
+    expect(output).toContain(`Plugin ${FAKE_PLUGIN} → ^1.0.0`);
+    expect(output).toContain(`Plugin ${FAKE_PLUGIN} → ^2.0.0`);
+    expect(output).not.toContain('different specifiers');
   });
 
   it('rejects a listed workflow with no `kind:`', async () => {
@@ -1054,7 +1050,7 @@ describe('workflow verify — storage budget', () => {
 kind: Workflow
 formatVersion: "1.0"
 name: ${name}
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 storage:
   defaultStrategy:
@@ -1159,7 +1155,7 @@ steps:
 kind: Workflow
 formatVersion: "1.0"
 name: undeclared-only-workflow
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 storage:
   defaultStrategy:
@@ -1209,7 +1205,7 @@ steps:
 kind: Workflow
 formatVersion: "1.0"
 name: overflow-workflow-clean
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 storage:
   defaultStrategy:
@@ -1253,7 +1249,7 @@ describe('workflow verify — cross-workflow reads', () => {
 kind: Workflow
 formatVersion: "1.0"
 name: ${name}
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
   keys:
@@ -1283,7 +1279,7 @@ steps:
 kind: Workflow
 formatVersion: "1.0"
 name: ${name}
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
   keys:
@@ -1332,7 +1328,7 @@ steps:
 kind: Workflow
 formatVersion: "1.0"
 name: cross-workflow-key-table
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
   keys:
@@ -1431,7 +1427,7 @@ describe('workspace verify — storage budget total', () => {
 kind: Workflow
 formatVersion: "1.0"
 name: ${name}
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
   keys:
@@ -1534,7 +1530,7 @@ steps: []
 kind: Workflow
 formatVersion: "1.0"
 name: ${name}
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 ${KV_STORAGE}
 steps:
@@ -1713,7 +1709,7 @@ backends:
 kind: Workflow
 formatVersion: "1.0"
 name: unknown-strategy-workflow
-plugins:
+dependencies:
   ${FAKE_PLUGIN}: "^1.0.0"
 storage:
   defaultStrategy:

@@ -24,7 +24,7 @@ function workflowWith(storage: Workflow['storage']): Workflow {
     kind: 'Workflow',
     formatVersion: '1.0',
     name: 'store-support-workflow',
-    plugins: {},
+    dependencies: {},
     storage,
     steps: [],
   } as unknown as Workflow;

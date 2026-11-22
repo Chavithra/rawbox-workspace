@@ -32,7 +32,7 @@ workflowPathList:
 kind: Workflow
 formatVersion: "1.0"
 name: test-workflow
-plugins: {}
+dependencies: {}
 storage:
   defaultStrategy:
     name: lmdb-kv
@@ -97,7 +97,7 @@ steps: []
   // Self-contained fixtures: this test needs a workspace whose plugin is a
   // real installable package, which the shared `beforeAll` fixture is not, so
   // it builds its own workspace + workflow rather than reusing it.
-  // The install pipeline reads the `plugins:` map and splices it into the
+  // The install pipeline reads the `dependencies:` map and splices it into the
   // generated package.json's `dependencies` for a plain `npm install`.
   it('should successfully setup workspace with YAML configurations', async () => {
     const localWorkspaceDir = path.join(tempDir, 'local-workspace');
@@ -130,7 +130,7 @@ workflowPathList:
 kind: Workflow
 formatVersion: "1.0"
 name: test-workflow
-plugins:
+dependencies:
   local-test-plugin: "file:${relativePluginSpecPath}"
 storage:
   defaultStrategy:
@@ -143,8 +143,9 @@ steps: []
     const localWorkspacePath = path.join(localWorkspaceDir, 'workspace.yaml');
     const setupResult = await setupWorkspace(localWorkspacePath, localSetupTargetDir);
     expect(setupResult.isOk()).toBe(true);
+    const envDir = setupResult._unsafeUnwrap().envs[0]!.envDir;
 
-    const pkgJsonPath = path.join(localSetupTargetDir, 'package.json');
+    const pkgJsonPath = path.join(envDir, 'package.json');
     const pkgJsonExists = await fs.access(pkgJsonPath)
       .then(() => true)
       .catch(() => false);
@@ -155,7 +156,7 @@ steps: []
     // one, resolved against the workspace directory.
     expect(pkg.dependencies['local-test-plugin']).toBe(`file:${localPluginDir}`);
 
-    const installedRealPath = await fs.realpath(path.join(localSetupTargetDir, 'node_modules', 'local-test-plugin'));
+    const installedRealPath = await fs.realpath(path.join(envDir, 'node_modules', 'local-test-plugin'));
     expect(installedRealPath).toBe(await fs.realpath(localPluginDir));
   });
 });

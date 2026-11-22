@@ -51,7 +51,7 @@ const WORKFLOW_DOC = `
 kind: Workflow
 formatVersion: "1.0"
 name: example
-plugins:
+dependencies:
   "@rawbox/plugin-fixture": "^0.0.1"
 storage:
   defaultStrategy:
